@@ -92,10 +92,35 @@ const SignInPageDemo = () => {
     }
   };
 
-  const handleGoogleSignIn = () => {
-    console.log("Continue with Google clicked");
-    // Implement Google OAuth flow here
-    alert("Google sign-in coming soon!");
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Request OAuth URL from backend
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/auth/google`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to initiate Google sign-in');
+      }
+
+      // Redirect to Google OAuth URL
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No OAuth URL received');
+      }
+    } catch (err: any) {
+      console.error('Google sign-in error:', err);
+      alert(err.message || 'Failed to sign in with Google. Please try again.');
+      setIsLoading(false);
+    }
   };
   
   const handleResetPassword = () => {
@@ -103,7 +128,7 @@ const SignInPageDemo = () => {
   }
 
   const handleCreateAccount = () => {
-    router.push('/auth/signup');
+    router.push('/signup');
   }
 
   return (

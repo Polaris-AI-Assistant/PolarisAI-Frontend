@@ -57,6 +57,10 @@ export const getAllChatSessions = async (): Promise<ChatSession[]> => {
       headers: getHeaders(),
     });
 
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
     const data = await response.json();
 
     if (!data.success) {
@@ -74,7 +78,7 @@ export const getAllChatSessions = async (): Promise<ChatSession[]> => {
       })),
     }));
   } catch (error) {
-    console.error('Error fetching chat sessions:', error);
+    console.error('Error in getAllChatSessions:', error);
     return [];
   }
 };
@@ -148,11 +152,23 @@ export const updateChatSession = async (
   messages: ChatMessage[]
 ): Promise<ChatSession | null> => {
   try {
+    // Filter out messages with empty content before sending
+    const validMessages = messages.filter(m => m.content && m.content.trim() !== '');
+    
+    if (validMessages.length === 0) {
+      console.warn('No valid messages to save');
+      return null;
+    }
+
     const response = await fetch(`${API_URL}/api/chat/sessions/${chatId}/messages`, {
       method: 'PUT',
       headers: getHeaders(),
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages: validMessages }),
     });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
     const data = await response.json();
 
@@ -170,7 +186,7 @@ export const updateChatSession = async (
       })),
     };
   } catch (error) {
-    console.error('Error updating chat session:', error);
+    console.error('Error in updateChatSession:', error);
     return null;
   }
 };

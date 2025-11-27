@@ -39,15 +39,23 @@ const StepIndicator = ({ currentStep, totalSteps }: { currentStep: number; total
 );
 
 interface SignUpPageProps {
-  onSignUp?: (data: any) => void;
+  onSendOtp?: (data: { fullName: string; email: string; password: string; confirmPassword: string }) => Promise<{ success: boolean; error?: string; data?: any }>;
+  onVerifyOtp?: (verificationCode: string, metadata: any) => Promise<{ success: boolean; error?: string; data?: any }>;
+  onResendOtp?: () => Promise<{ success: boolean; error?: string }>;
   onGoogleSignUp?: () => void;
   onLogin?: () => void;
+  onComplete?: () => void;
+  isLoading?: boolean;
 }
 
 export const SignUpPage: React.FC<SignUpPageProps> = ({
-  onSignUp,
+  onSendOtp,
+  onVerifyOtp,
+  onResendOtp,
   onGoogleSignUp,
   onLogin,
+  onComplete,
+  isLoading = false,
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
@@ -79,7 +87,7 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({
   };
 
   // Step 1: Basic Account Details (Name & Email only)
-  const Step1 = () => (
+  const Step1 = React.useMemo(() => (
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">Create Account</h2>
@@ -116,7 +124,8 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({
 
       <button
         onClick={() => setCurrentStep(1)}
-        className="w-full rounded-2xl bg-white py-4 font-semibold text-black hover:bg-gray-100 hover:shadow-lg hover:shadow-white/20 hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2"
+        disabled={!formData.fullName || !formData.email}
+        className="w-full rounded-2xl bg-white py-4 font-semibold text-black hover:bg-gray-100 hover:shadow-lg hover:shadow-white/20 hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
       >
         Continue
         <ArrowRight className="w-5 h-5" />
@@ -142,10 +151,10 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({
         </a>
       </p>
     </div>
-  );
+  ), [formData.fullName, formData.email, onGoogleSignUp, onLogin]);
 
   // Step 2: Password Setup
-  const Step2 = () => (
+  const Step2 = React.useMemo(() => (
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-4xl md:text-4xl font-bold text-white mb-3">Create Password</h2>
@@ -207,17 +216,52 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({
       </div>
 
       <button
-        onClick={() => setCurrentStep(2)}
-        className="w-full rounded-2xl bg-white py-4 font-semibold text-black hover:bg-gray-100 hover:shadow-lg hover:shadow-white/20 hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2"
+        onClick={async () => {
+          if (!formData.password || !formData.confirmPassword) {
+            alert('Please enter both password fields');
+            return;
+          }
+          if (formData.password !== formData.confirmPassword) {
+            alert('Passwords do not match');
+            return;
+          }
+          
+          // Send OTP
+          if (onSendOtp) {
+            const result = await onSendOtp({
+              fullName: formData.fullName,
+              email: formData.email,
+              password: formData.password,
+              confirmPassword: formData.confirmPassword,
+            });
+            
+            if (result.success) {
+              setCurrentStep(2); // Move to OTP verification step
+            }
+          } else {
+            setCurrentStep(2);
+          }
+        }}
+        disabled={!formData.password || !formData.confirmPassword || isLoading}
+        className="w-full rounded-2xl bg-white py-4 font-semibold text-black hover:bg-gray-100 hover:shadow-lg hover:shadow-white/20 hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
       >
-        Continue
-        <ArrowRight className="w-5 h-5" />
+        {isLoading ? (
+          <>
+            <div className="inline-block animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-black"></div>
+            Sending OTP...
+          </>
+        ) : (
+          <>
+            Continue
+            <ArrowRight className="w-5 h-5" />
+          </>
+        )}
       </button>
     </div>
-  );
+  ), [formData.password, formData.confirmPassword, isLoading, onSendOtp, formData.fullName, formData.email, showPassword, showConfirmPassword]);
 
   // Step 3: Email Verification
-  const Step3 = () => (
+  const Step3 = React.useMemo(() => (
     <div className="space-y-6">
       <div className="flex items-center justify-center mb-6">
         <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
@@ -246,27 +290,67 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({
       </div>
 
       <div className="flex items-center justify-center gap-6 text-sm">
-        <button className="text-gray-400 hover:text-white transition-colors">
+        <button 
+          onClick={async () => {
+            if (onResendOtp) {
+              await onResendOtp();
+            }
+          }}
+          disabled={isLoading}
+          className="text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+        >
           Resend Code
         </button>
         <span className="text-gray-600">•</span>
-        <button className="text-gray-400 hover:text-white transition-colors">
+        <button 
+          onClick={() => setCurrentStep(0)}
+          className="text-gray-400 hover:text-white transition-colors"
+        >
           Change Email
         </button>
       </div>
 
       <button
-        onClick={() => setCurrentStep(3)}
-        className="w-full rounded-2xl bg-white py-4 font-semibold text-black hover:bg-gray-100 hover:shadow-lg hover:shadow-white/20 hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2"
+        onClick={async () => {
+          if (!formData.verificationCode || formData.verificationCode.length !== 6) {
+            alert('Please enter a valid 6-digit code');
+            return;
+          }
+          
+          // Verify OTP
+          if (onVerifyOtp) {
+            const result = await onVerifyOtp(formData.verificationCode, {
+              useCases: formData.useCases,
+              userType: formData.userType,
+            });
+            
+            if (result.success) {
+              setCurrentStep(3); // Move to use cases step
+            }
+          } else {
+            setCurrentStep(3);
+          }
+        }}
+        disabled={!formData.verificationCode || formData.verificationCode.length !== 6 || isLoading}
+        className="w-full rounded-2xl bg-white py-4 font-semibold text-black hover:bg-gray-100 hover:shadow-lg hover:shadow-white/20 hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
       >
-        Verify & Continue
-        <ArrowRight className="w-5 h-5" />
+        {isLoading ? (
+          <>
+            <div className="inline-block animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-black"></div>
+            Verifying...
+          </>
+        ) : (
+          <>
+            Verify & Continue
+            <ArrowRight className="w-5 h-5" />
+          </>
+        )}
       </button>
     </div>
-  );
+  ), [formData.verificationCode, formData.email, isLoading, onVerifyOtp, onResendOtp, formData.useCases, formData.userType]);
 
   // Step 4: Use Cases (First Personalization Question)
-  const Step4 = () => {
+  const Step4 = React.useMemo(() => {
     const useCases = [
       'Manage tasks & projects',
       'Personal productivity',
@@ -306,17 +390,18 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({
 
         <button
           onClick={() => setCurrentStep(4)}
-          className="w-full rounded-2xl bg-white py-4 font-semibold text-black hover:bg-gray-100 hover:shadow-lg hover:shadow-white/20 hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2"
+          disabled={formData.useCases.length === 0}
+          className="w-full rounded-2xl bg-white py-4 font-semibold text-black hover:bg-gray-100 hover:shadow-lg hover:shadow-white/20 hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
         >
           Continue
           <ArrowRight className="w-5 h-5" />
         </button>
       </div>
     );
-  };
+  }, [formData.useCases, toggleUseCase]);
 
   // Step 5: User Type (Second Personalization Question)
-  const Step5 = () => {
+  const Step5 = React.useMemo(() => {
     const userTypes = [
       { value: 'student', label: 'Student', icon: '🎓' },
       { value: 'professional', label: 'Professional', icon: '💼' },
@@ -352,17 +437,18 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({
 
         <button
           onClick={() => setCurrentStep(5)}
-          className="w-full rounded-2xl bg-white py-4 font-semibold text-black hover:bg-gray-100 hover:shadow-lg hover:shadow-white/20 hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2"
+          disabled={!formData.userType}
+          className="w-full rounded-2xl bg-white py-4 font-semibold text-black hover:bg-gray-100 hover:shadow-lg hover:shadow-white/20 hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
         >
           Continue
           <ArrowRight className="w-5 h-5" />
         </button>
       </div>
     );
-  };
+  }, [formData.userType, handleInputChange]);
 
   // Step 6: Terms & Privacy
-  const Step6 = () => (
+  const Step6 = React.useMemo(() => (
     <div className="space-y-6">
       <div className="flex items-center justify-center mb-6">
         <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
@@ -426,10 +512,10 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({
         <ArrowRight className="w-5 h-5" />
       </button>
     </div>
-  );
+  ), [formData.termsAccepted, formData.privacyAccepted, formData.dataConsentAccepted, handleInputChange]);
 
   // Step 7: Welcome Screen
-  const Step7 = () => (
+  const Step7 = React.useMemo(() => (
     <div className="space-y-6 text-center">
       <div className="flex items-center justify-center mb-6">
         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center animate-pulse">
@@ -446,24 +532,31 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({
 
       <div className="flex flex-col gap-3 mt-12">
         <button
-          onClick={() => {/* Handle onboarding start */}}
+          onClick={() => {
+            if (onComplete) {
+              onComplete();
+            }
+          }}
           className="w-full rounded-2xl bg-white py-4 font-semibold text-black hover:bg-gray-100 hover:shadow-lg hover:shadow-white/20 hover:scale-[1.02] transition-all duration-200"
         >
-          Start Onboarding
+          Go to Dashboard
         </button>
 
         <button
-          onClick={() => {/* Handle skip */}}
+          onClick={() => {
+            if (onComplete) {
+              onComplete();
+            }
+          }}
           className="w-full rounded-2xl border-2 border-neutral-700/50 py-4 font-semibold text-white hover:border-neutral-600 hover:bg-neutral-900/50 transition-all"
         >
           Skip for now
         </button>
       </div>
     </div>
-  );
+  ), [onComplete]);
 
-  const steps = [Step1, Step2, Step3, Step4, Step5, Step6, Step7];
-  const CurrentStepComponent = steps[currentStep];
+  const steps = React.useMemo(() => [Step1, Step2, Step3, Step4, Step5, Step6, Step7], [Step1, Step2, Step3, Step4, Step5, Step6, Step7]);
 
   return (
     <div className="h-[100dvh] flex flex-col md:flex-row font-geist w-[100dvw] bg-black">
@@ -482,7 +575,7 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({
           {currentStep < 6 && (
             <StepIndicator currentStep={currentStep} totalSteps={6} />
           )}
-          <CurrentStepComponent />
+          {steps[currentStep]}
         </div>
       </section>
     </div>

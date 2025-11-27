@@ -40,7 +40,7 @@ export function NavbarDemo() {
         <div className="flex items-center gap-4">
           <NavbarButton 
             variant="primary" 
-            href="/landing_page/signin"
+            href="/signin"
             className="text-black"
           >
             Sign In

@@ -302,6 +302,18 @@ function MainAgentPageContent() {
   const inputRef = useRef<HTMLInputElement>(null);
   const streamingContentRef = useRef<string>('');
   const metadataRef = useRef<{ agentsUsed?: string[], processingTime?: string }>({});
+  const shouldSaveRef = useRef<boolean>(false);
+  const isSavingRef = useRef<boolean>(false); // Prevent duplicate saves
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Store timeout reference
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Initialize or load chat session
   useEffect(() => {
@@ -355,16 +367,17 @@ function MainAgentPageContent() {
   }, [streamingMessageId, messages]);
 
   useEffect(() => {
-    // Save conversation whenever messages change
+    // Save conversation when shouldSave flag is set (for error cases or manual saves)
     const updateChat = async () => {
-      if (currentChatId && messages.length > 0) {
-        await updateChatSession(currentChatId, messages);
-        await loadChatHistory(); // Refresh sidebar
+      if (currentChatId && messages.length > 0 && !streamingMessageId && shouldSaveRef.current) {
+        console.log('[useEffect] shouldSave flag is true, triggering save');
+        shouldSaveRef.current = false; // Reset flag immediately to prevent re-triggers
+        await saveMessagesToDB(messages);
       }
     };
     
     updateChat();
-  }, [messages, currentChatId]);
+  }, [messages, currentChatId, streamingMessageId]);
 
   const loadExamplesAndHealth = async () => {
     try {
@@ -384,13 +397,51 @@ function MainAgentPageContent() {
     setGroupedChats(grouped);
   };
 
+  // Centralized save function to prevent duplicate saves
+  const saveMessagesToDB = async (messagesToSave: ChatMessage[]) => {
+    if (isSavingRef.current) {
+      console.log('Save already in progress, skipping duplicate save');
+      return;
+    }
+
+    if (!currentChatId || messagesToSave.length === 0) {
+      console.log('No chatId or messages to save');
+      return;
+    }
+
+    const validMessages = messagesToSave.filter(m => m.content && m.content.trim() !== '');
+    if (validMessages.length === 0) {
+      console.log('No valid messages to save');
+      return;
+    }
+
+    try {
+      isSavingRef.current = true;
+      console.log('Saving', validMessages.length, 'messages to DB');
+      const result = await updateChatSession(currentChatId, validMessages);
+      if (result) {
+        console.log('Messages saved successfully');
+        await loadChatHistory();
+      } else {
+        console.error('Failed to save messages to DB');
+      }
+    } catch (error) {
+      console.error('Error saving messages:', error);
+    } finally {
+      isSavingRef.current = false;
+    }
+  };
+
   const loadChatSession = async (chatId: string) => {
+    console.log('Loading chat session:', chatId);
     const session = await getChatSession(chatId);
     if (session) {
+      console.log('Chat session loaded with', session.messages.length, 'messages');
       setCurrentChatId(session.id);
       setMessages(session.messages);
       setShowExamples(session.messages.length === 0);
     } else {
+      console.log('Chat session not found, creating new one');
       // Chat not found, create new one
       const newSession = await createNewChatSession();
       if (newSession) {
@@ -476,11 +527,17 @@ function MainAgentPageContent() {
     setMessages((prev) => [...prev, assistantMessage]);
     
     try {
-      // Build conversation history
-      const conversationHistory: ConversationMessage[] = messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      // Build conversation history - include all previous messages AND the current user message
+      const conversationHistory: ConversationMessage[] = [
+        ...messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+        {
+          role: 'user',
+          content: query,
+        }
+      ];
 
       // Process query with streaming
       await processQueryStreaming(query, conversationHistory, (chunk: StreamChunk) => {
@@ -526,19 +583,36 @@ function MainAgentPageContent() {
             throw new Error(chunk.error || chunk.message || 'Unknown error');
             
           case 'done':
-            // Finalize the message with metadata
-            setMessages((prev) =>
-              prev.map((m) =>
+            // Finalize the message with metadata and save immediately
+            const finalContent = streamingContentRef.current;
+            const finalMetadata = { ...metadataRef.current };
+            
+            setMessages((prev) => {
+              const updatedMessages = prev.map((m) =>
                 m.id === assistantMessageId
                   ? {
                       ...m,
-                      content: streamingContentRef.current,
-                      agentsUsed: metadataRef.current.agentsUsed,
-                      processingTime: metadataRef.current.processingTime,
+                      content: finalContent,
+                      agentsUsed: finalMetadata.agentsUsed,
+                      processingTime: finalMetadata.processingTime,
                     }
                   : m
-              )
-            );
+              );
+              
+              // Clear any existing save timeout
+              if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+              }
+              
+              // Save to database after a short delay to ensure state is updated
+              console.log('Streaming completed, scheduling save for', updatedMessages.length, 'messages');
+              saveTimeoutRef.current = setTimeout(() => {
+                saveMessagesToDB(updatedMessages);
+                saveTimeoutRef.current = null;
+              }, 200);
+              
+              return updatedMessages;
+            });
             break;
         }
       });
@@ -551,8 +625,8 @@ function MainAgentPageContent() {
       }
       
       // Update the streaming message with error
-      setMessages((prev) =>
-        prev.map((m) =>
+      setMessages((prev) => {
+        const updatedMessages = prev.map((m) =>
           m.id === assistantMessageId
             ? {
                 ...m,
@@ -560,14 +634,30 @@ function MainAgentPageContent() {
                 isError: true,
               }
             : m
-        )
-      );
+        );
+        
+        // Clear any existing save timeout
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+        
+        // Save error message to database
+        console.log('Error occurred, scheduling save for messages with error');
+        saveTimeoutRef.current = setTimeout(() => {
+          saveMessagesToDB(updatedMessages);
+          saveTimeoutRef.current = null;
+        }, 200);
+        
+        return updatedMessages;
+      });
     } finally {
       setIsLoading(false);
       setIsThinking(false);
+      console.log('Finally block: Cleaning up streaming state');
       setStreamingMessageId(null);
       streamingContentRef.current = '';
       metadataRef.current = {};
+      shouldSaveRef.current = false; // Reset since we saved in 'done' case
       inputRef.current?.focus();
     }
   };
