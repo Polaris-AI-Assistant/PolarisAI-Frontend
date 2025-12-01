@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import ProfileDropdown from "@/components/kokonutui/profile-dropdown";
 import { getStoredUser } from "@/lib/auth";
+import Image from "next/image";
 import {
   Search as SearchIcon,
   Dashboard,
@@ -89,11 +90,11 @@ function BrandBadge() {
     <div className="relative shrink-0 w-full">
       <div className="flex items-center p-1 w-full">
         <div className="h-10 w-8 flex items-center justify-center pl-2">
-          <InterfacesLogoSquare />
+          <Image src="/polaris.png" alt="Polaris AI" width={48} height={48} className="object-contain" />
         </div>
         <div className="px-2 py-1">
-          <div className="font-semibold text-[16px] text-neutral-50">
-            Agent Hub
+          <div className="font-semibold text-[22px] text-neutral-50">
+            Polaris AI
           </div>
         </div>
       </div>
@@ -183,7 +184,9 @@ function getSidebarContent(
   onNewChat: () => void,
   onDeleteChat: (id: string) => void
 ): SidebarContent {
-  const chatItems: MenuItemT[] = chats.slice(0, 10).map(chat => ({
+  // Only show chats that have at least 1 message (messageCount >= 1)
+  const chatsWithMessages = chats.filter(chat => chat.messageCount >= 1);
+  const chatItems: MenuItemT[] = chatsWithMessages.slice(0, 10).map(chat => ({
     icon: <Time size={16} className="text-neutral-50" />,
     label: chat.title || 'New conversation',
     isActive: chat.id === currentChatId,
@@ -260,9 +263,9 @@ function IconNavigation({
       {/* Logo */}
       <div className="mb-3 w-full flex flex-col items-center">
         <div className="size-10 mb-2">
-          <InterfacesLogoSquare />
+          <Image src="/polaris.png" alt="Polaris AI" width={60} height={60} className="object-contain" />
         </div>
-        <span className="text-[13px] text-neutral-50 font-bold tracking-wide">Polaris AI</span>
+        <span className="text-[22px] text-neutral-50 font-bold tracking-wide">Polaris AI</span>
       </div>
 
       {/* Navigation Icons */}
@@ -561,6 +564,7 @@ interface TwoLevelSidebarProps {
   onNewChat: () => void;
   onDeleteChat: (id: string) => void;
   onDashboardClick?: () => void;
+  hideIconNav?: boolean;
 }
 
 export function TwoLevelSidebar({ 
@@ -569,18 +573,21 @@ export function TwoLevelSidebar({
   onChatSelect, 
   onNewChat, 
   onDeleteChat,
-  onDashboardClick 
+  onDashboardClick,
+  hideIconNav = false
 }: TwoLevelSidebarProps) {
   const [activeSection, setActiveSection] = useState("chats");
   const [isDetailCollapsed, setIsDetailCollapsed] = useState(false);
 
   return (
     <div className="flex flex-row relative">
-      <IconNavigation 
-        activeSection={activeSection} 
-        onSectionChange={setActiveSection}
-        onDashboardClick={onDashboardClick}
-      />
+      {!hideIconNav && (
+        <IconNavigation 
+          activeSection={activeSection} 
+          onSectionChange={setActiveSection}
+          onDashboardClick={onDashboardClick}
+        />
+      )}
       <DetailSidebar 
         activeSection={activeSection}
         chats={chats}
@@ -597,7 +604,7 @@ export function TwoLevelSidebar({
         <button
           type="button"
           onClick={() => setIsDetailCollapsed(false)}
-          className="absolute top-4 left-28 z-50 flex items-center justify-center rounded-lg size-10 transition-colors duration-300 bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-300 border border-neutral-800"
+          className={`absolute top-4 ${hideIconNav ? 'left-4' : 'left-28'} z-50 flex items-center justify-center rounded-lg size-10 transition-colors duration-300 bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-300 border border-neutral-800`}
           aria-label="Expand sidebar"
         >
           <ChevronDownIcon size={20} className="rotate-90" />

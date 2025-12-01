@@ -13,7 +13,7 @@ export function middleware(request: NextRequest) {
   const protectedRoutes = ['/dashboard', '/profile', '/github', '/search'];
   
   // Auth routes that authenticated users shouldn't access
-  const authRoutes = ['/auth/signin', '/auth/signup'];
+  const authRoutes = ['/signin', '/signup', '/auth/signin', '/auth/signup'];
   
   // Check if the current path is a protected route
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
@@ -23,7 +23,7 @@ export function middleware(request: NextRequest) {
 
   // If user is trying to access a protected route without auth token
   if (isProtectedRoute && !authToken) {
-    const signInUrl = new URL('/auth/signin', request.url);
+    const signInUrl = new URL('/signin', request.url);
     signInUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(signInUrl);
   }

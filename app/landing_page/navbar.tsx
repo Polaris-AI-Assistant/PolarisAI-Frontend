@@ -20,8 +20,8 @@ export function NavbarDemo() {
       link: "/",
     },
     {
-      name: "Components",
-      link: "/components",
+      name: "Privacy Policy",
+      link: "/privacy_policy",
     },
     {
       name: "Docs",

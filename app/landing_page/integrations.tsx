@@ -1,5 +1,4 @@
 import { cn } from '@/lib/utils'
-import { LogoIcon } from './logo'
 import { Button } from './button'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -11,29 +10,25 @@ export default function IntegrationsSection() {
     return (
         <section>
             <div className="bg-black py-24 md:py-32">
-                <div className="mx-auto max-w-7xl px-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+                <div className="mx-auto max-w-8xl px-8 md:px-16 lg:px-32">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 lg:gap-32 items-center">
                         {/* Left side - Integration diagram */}
-                        <div className="scale-125 origin-center">
+                        <div className="scale-175 origin-center -ml-5">
                             <div className="relative mx-auto flex max-w-sm items-center justify-between">
                                 <div className="space-y-6">
                                     <IntegrationCard position="left-top">
                                         <Image src="/Google_Calendar_icon_(2020).svg.png" alt="Google Calendar" width={24} height={24} />
                                     </IntegrationCard>
                                     <IntegrationCard position="left-middle">
-                                        <Image src="/Google_Docs_logo_(2014-2020).svg.png" alt="Google Docs" width={24} height={24} />
+                                        <Image src="/Google_Drive.png" alt="Google Forms" width={24} height={24} />
                                     </IntegrationCard>
                                     <IntegrationCard position="left-bottom">
-                                        <Image src="/Google_Forms_2020_Logo.svg.png" alt="Google Forms" width={24} height={24} />
+                                        <Image src="/gmail.png" alt="Google Sheets" width={28} height={24} />
                                     </IntegrationCard>
                                 </div>
                                 <div className="mx-auto my-2 flex w-fit justify-center gap-2">
-                                    <div className="bg-neutral-900 relative z-20 rounded-2xl border border-neutral-700 p-1">
-                                        <IntegrationCard
-                                            className="bg-neutral-800 size-16 border-white/25 shadow-xl shadow-white/10"
-                                            isCenter={true}>
-                                            <LogoIcon />
-                                        </IntegrationCard>
+                                    <div className="relative z-20">
+                                        <Image src="/polaris.png" alt="Polaris AI" width={120} height={120} className="size-24" />
                                     </div>
                                 </div>
                                 <div
@@ -42,10 +37,10 @@ export default function IntegrationsSection() {
 
                                 <div className="space-y-6">
                                     <IntegrationCard position="right-top">
-                                        <Image src="/github-white-icon.webp" alt="GitHub" width={24} height={24} />
+                                        <Image src="/git3.png" alt="GitHub" width={80} height={80} />
                                     </IntegrationCard>
                                     <IntegrationCard position="right-middle">
-                                        <Image src="/Google_Meet-Logo.wine.png" alt="Google Meet" width={24} height={24} />
+                                        <Image src="/meet_new.png" alt="Google Meet" width={28} height={20} />
                                     </IntegrationCard>
                                     <IntegrationCard position="right-bottom">
                                         <Image src="/Google_Sheets_logo_(2014-2020).svg.png" alt="Google Sheets" width={24} height={24} />
@@ -60,7 +55,7 @@ export default function IntegrationsSection() {
                                 <span className="text-white text-sm font-medium">Connectors and Integrations</span>
                             </div>
                             
-                            <h2 className={`${spaceGrotesk.className} text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight`}>
+                            <h2 className={`${spaceGrotesk.className} text-4xl md:text-5xl lg:text-5xl font-bold text-white leading-tight`}>
                                 When Your Apps Work Together, You Work Better.
                             </h2>
                             
@@ -86,18 +81,33 @@ export default function IntegrationsSection() {
 
 const IntegrationCard = ({ children, className, position, isCenter = false }: { children: React.ReactNode; className?: string; position?: 'left-top' | 'left-middle' | 'left-bottom' | 'right-top' | 'right-middle' | 'right-bottom'; isCenter?: boolean }) => {
     return (
-        <div className={cn('bg-neutral-900 relative flex size-12 rounded-xl border border-neutral-700', className)}>
-            <div className={cn('relative z-20 m-auto size-fit *:size-6', isCenter && '*:size-8')}>{children}</div>
+        <div className={cn(
+            'relative flex rounded-2xl p-[1px]',
+            'bg-gradient-to-b from-white/30 via-white/5 to-transparent',
+            isCenter ? 'size-16' : 'size-12',
+            className
+        )}>
+            <div className={cn(
+                'relative flex w-full h-full rounded-[14px]',
+                'bg-gradient-to-b from-neutral-800 to-neutral-900',
+                'shadow-[0_8px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)]'
+            )}>
+                <div className={cn(
+                    'relative z-20 m-auto flex items-center justify-center',
+                    isCenter ? 'size-8' : 'size-6',
+                    '[&>img]:max-w-full [&>img]:max-h-full [&>img]:w-auto [&>img]:h-auto [&>img]:object-contain'
+                )}>{children}</div>
+            </div>
             {position && !isCenter && (
                 <div
                     className={cn(
-                        'bg-linear-to-r to-gray-600/50 absolute z-10 h-px',
-                        position === 'left-top' && 'left-full top-1/2 w-[130px] origin-left rotate-[25deg]',
-                        position === 'left-middle' && 'left-full top-1/2 w-[120px] origin-left',
-                        position === 'left-bottom' && 'left-full top-1/2 w-[130px] origin-left rotate-[-25deg]',
-                        position === 'right-top' && 'bg-linear-to-l right-full top-1/2 w-[130px] origin-right rotate-[-25deg]',
-                        position === 'right-middle' && 'bg-linear-to-l right-full top-1/2 w-[120px] origin-right',
-                        position === 'right-bottom' && 'bg-linear-to-l right-full top-1/2 w-[130px] origin-right rotate-[25deg]'
+                        'absolute z-10 h-[1.5px]',
+                        position === 'left-top' && 'left-full top-1/2 w-[130px] origin-left rotate-[25deg] bg-gradient-to-r from-gray-600/50 to-transparent',
+                        position === 'left-middle' && 'left-full top-1/2 w-[120px] origin-left bg-gradient-to-r from-gray-600/50 to-transparent',
+                        position === 'left-bottom' && 'left-full top-1/2 w-[130px] origin-left rotate-[-25deg] bg-gradient-to-r from-gray-600/50 to-transparent',
+                        position === 'right-top' && 'right-full top-1/2 w-[130px] origin-right rotate-[-25deg] bg-gradient-to-l from-gray-600/50 to-transparent',
+                        position === 'right-middle' && 'right-full top-1/2 w-[120px] origin-right bg-gradient-to-l from-gray-600/50 to-transparent',
+                        position === 'right-bottom' && 'right-full top-1/2 w-[130px] origin-right rotate-[25deg] bg-gradient-to-l from-gray-600/50 to-transparent'
                     )}
                 />
             )}

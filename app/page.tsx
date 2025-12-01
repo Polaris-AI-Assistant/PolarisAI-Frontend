@@ -18,11 +18,11 @@ export default function Home() {
   }, [router]);
 
   const handleSignIn = () => {
-    router.push('/auth/signin');
+    router.push('/signin');
   };
 
   const handleSignUp = () => {
-    router.push('/auth/signup');
+    router.push('/signup');
   };
 
   return (
