@@ -13,6 +13,17 @@ export interface ChatMessage {
   agentsUsed?: string[];
   processingTime?: string;
   isError?: boolean;
+  // Confirmation flow properties
+  isPendingConfirmation?: boolean;
+  isConfirmed?: boolean;
+  isCanceled?: boolean;
+  confirmationData?: {
+    requestId: string;
+    toolName: string;
+    agentName: string;
+    actionType: string;
+    description: string;
+  };
 }
 
 export interface ChatSession {

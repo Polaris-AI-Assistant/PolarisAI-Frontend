@@ -30,7 +30,11 @@ import {
   checkAgentHealth,
   formatAgentName,
   getAgentIcon,
+  getActionTypeIcon,
   ConversationMessage,
+  ConfirmationRequest,
+  confirmActionStreaming,
+  cancelAction,
 } from '../lib/mainAgent';
 import {
   ChatMessage,
@@ -44,7 +48,7 @@ import {
 } from '../lib/chatHistory';
 import { VercelV0Chat } from '@/components/ui/v0-ai-chat';
 import { ThinkingIndicator } from '@/components/ui/thinking-indicator';
-import { Calendar, FileText, ClipboardList, Github, Video } from 'lucide-react';
+import { Calendar, FileText, ClipboardList, Github, Video, Check, X } from 'lucide-react';
 import { EventCard } from '@/components/ui/event-card';
 
 // Helper function to format markdown-style text
@@ -270,6 +274,9 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     lastMonth: [],
     older: [],
   });
+  // Confirmation flow state
+  const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationRequest | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const streamingContentRef = useRef<string>('');
@@ -489,6 +496,56 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
               processingTime: chunk.processingTime,
             };
             break;
+          
+          case 'confirmation_request':
+            // Handle confirmation request - pause streaming and show confirmation UI
+            console.log('[Confirmation] Received confirmation request:', chunk);
+            console.log('[Confirmation] Preview content:', chunk.previewContent);
+            console.log('[Confirmation] Looking for message ID:', assistantMessageId);
+            
+            // Store the preview content first
+            const confirmationPreview = chunk.previewContent || 'Action requires confirmation';
+            
+            // Update the assistant message to show the confirmation preview FIRST
+            setMessages((prev) => {
+              console.log('[Confirmation] Current messages:', prev.map(m => ({ id: m.id, content: m.content?.substring(0, 50) })));
+              const updated = prev.map((m) =>
+                m.id === assistantMessageId
+                  ? { 
+                      ...m, 
+                      content: confirmationPreview,
+                      isPendingConfirmation: true,
+                      confirmationData: {
+                        requestId: chunk.requestId!,
+                        toolName: chunk.toolName!,
+                        agentName: chunk.agentName!,
+                        actionType: chunk.actionType!,
+                        description: chunk.description!,
+                      }
+                    }
+                  : m
+              );
+              console.log('[Confirmation] Updated messages:', updated.map(m => ({ id: m.id, content: m.content?.substring(0, 50), isPending: (m as any).isPendingConfirmation })));
+              return updated;
+            });
+            
+            // Then update other states
+            setIsThinking(false);
+            setIsLoading(false);
+            setStreamingMessageId(null);
+            
+            // Store the confirmation request
+            setPendingConfirmation({
+              requestId: chunk.requestId!,
+              toolName: chunk.toolName!,
+              agentName: chunk.agentName!,
+              actionType: chunk.actionType!,
+              description: chunk.description!,
+              params: chunk.params || {},
+              previewContent: chunk.previewContent!,
+              originalQuery: chunk.originalQuery,
+            });
+            break;
             
           case 'error':
             throw new Error(chunk.error || chunk.message || 'Unknown error');
@@ -498,16 +555,22 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             const finalMetadata = { ...metadataRef.current };
             
             setMessages((prev) => {
-              const updatedMessages = prev.map((m) =>
-                m.id === assistantMessageId
-                  ? {
-                      ...m,
-                      content: finalContent,
-                      agentsUsed: finalMetadata.agentsUsed,
-                      processingTime: finalMetadata.processingTime,
-                    }
-                  : m
-              );
+              const updatedMessages = prev.map((m) => {
+                if (m.id === assistantMessageId) {
+                  // Don't overwrite content if this is a pending confirmation
+                  // (confirmation_request sets the content, done should not clear it)
+                  if ((m as any).isPendingConfirmation) {
+                    return m; // Keep the message as-is
+                  }
+                  return {
+                    ...m,
+                    content: finalContent,
+                    agentsUsed: finalMetadata.agentsUsed,
+                    processingTime: finalMetadata.processingTime,
+                  };
+                }
+                return m;
+              });
               
               if (saveTimeoutRef.current) {
                 clearTimeout(saveTimeoutRef.current);
@@ -559,6 +622,177 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       streamingContentRef.current = '';
       metadataRef.current = {};
       shouldSaveRef.current = false;
+      inputRef.current?.focus();
+    }
+  };
+
+  /**
+   * Handle user confirming a pending action
+   * Executes the action and streams the response
+   */
+  const handleConfirmAction = async () => {
+    if (!pendingConfirmation || isConfirming) return;
+
+    setIsConfirming(true);
+    setIsThinking(true);
+    setThinkingMessage('Executing your confirmed action...');
+
+    // Create a new assistant message for the execution response
+    const responseMessageId = (Date.now() + 1).toString();
+    setStreamingMessageId(responseMessageId);
+    streamingContentRef.current = '';
+    metadataRef.current = {};
+
+    const responseMessage: ChatMessage = {
+      id: responseMessageId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+    };
+
+    // Update the pending confirmation message and add response message
+    setMessages((prev) => {
+      const updated = prev.map((m) =>
+        (m as any).isPendingConfirmation
+          ? { ...m, isPendingConfirmation: false, isConfirmed: true }
+          : m
+      );
+      return [...updated, responseMessage];
+    });
+
+    try {
+      await confirmActionStreaming(pendingConfirmation.requestId, (chunk: StreamChunk) => {
+        switch (chunk.type) {
+          case 'thinking':
+            setIsThinking(chunk.status === 'start');
+            break;
+
+          case 'status':
+            setThinkingMessage(chunk.message || 'Processing...');
+            break;
+
+          case 'content':
+            if (chunk.text) {
+              streamingContentRef.current += chunk.text;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === responseMessageId
+                    ? { ...m, content: streamingContentRef.current }
+                    : m
+                )
+              );
+            }
+            break;
+
+          case 'metadata':
+            metadataRef.current = {
+              agentsUsed: chunk.agentsUsed,
+              processingTime: chunk.processingTime,
+            };
+            break;
+
+          case 'error':
+            throw new Error(chunk.error || chunk.message || 'Action execution failed');
+
+          case 'done':
+            const finalContent = streamingContentRef.current;
+            const finalMetadata = { ...metadataRef.current };
+
+            setMessages((prev) => {
+              const updatedMessages = prev.map((m) =>
+                m.id === responseMessageId
+                  ? {
+                      ...m,
+                      content: finalContent,
+                      agentsUsed: finalMetadata.agentsUsed,
+                      processingTime: finalMetadata.processingTime,
+                    }
+                  : m
+              );
+
+              if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+              }
+
+              saveTimeoutRef.current = setTimeout(() => {
+                saveMessagesToDB(updatedMessages);
+                saveTimeoutRef.current = null;
+              }, 200);
+
+              return updatedMessages;
+            });
+            break;
+        }
+      });
+    } catch (error: any) {
+      if (error.message && (error.message.includes('Session expired') || error.message.includes('Authentication required'))) {
+        router.push('/auth/signin');
+        return;
+      }
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === responseMessageId
+            ? {
+                ...m,
+                content: `Error: ${error.message || 'Failed to execute action. Please try again.'}`,
+                isError: true,
+              }
+            : m
+        )
+      );
+    } finally {
+      setIsConfirming(false);
+      setIsThinking(false);
+      setStreamingMessageId(null);
+      setPendingConfirmation(null);
+      streamingContentRef.current = '';
+      metadataRef.current = {};
+      inputRef.current?.focus();
+    }
+  };
+
+  /**
+   * Handle user canceling a pending action
+   */
+  const handleCancelAction = async () => {
+    if (!pendingConfirmation) return;
+
+    try {
+      const result = await cancelAction(pendingConfirmation.requestId);
+
+      // Update the message to show cancellation
+      setMessages((prev) =>
+        prev.map((m) =>
+          (m as any).isPendingConfirmation
+            ? {
+                ...m,
+                content: result.message || 'Action canceled. Let me know if you want to make any changes.',
+                isPendingConfirmation: false,
+                isCanceled: true,
+              }
+            : m
+        )
+      );
+
+      // Save the updated messages
+      setMessages((prev) => {
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+
+        saveTimeoutRef.current = setTimeout(() => {
+          saveMessagesToDB(prev);
+          saveTimeoutRef.current = null;
+        }, 200);
+
+        return prev;
+      });
+    } catch (error: any) {
+      console.error('Error canceling action:', error);
+      // Still clear the confirmation state even on error
+    } finally {
+      setPendingConfirmation(null);
       inputRef.current?.focus();
     }
   };
@@ -691,6 +925,117 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                   ) : message.isError ? (
                     <div className="max-w-3xl rounded-2xl px-6 py-2 bg-red-500/10 border border-red-500/30 text-red-400">
                       <div className="whitespace-pre-wrap">{message.content}</div>
+                    </div>
+                  ) : (message as any).isPendingConfirmation ? (
+                    // Confirmation request message with Confirm/Cancel buttons
+                    <div className="max-w-3xl">
+                      <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 overflow-hidden">
+                        {/* Header */}
+                        <div className="px-4 py-3 bg-amber-500/20 border-b border-amber-500/30 flex items-center gap-2">
+                          <span className="text-xl">
+                            {getActionTypeIcon((message as any).confirmationData?.actionType || 'unknown')}
+                          </span>
+                          <span className="font-semibold text-amber-200">
+                            {(message as any).confirmationData?.description || 'Action Requires Confirmation'}
+                          </span>
+                        </div>
+                        
+                        {/* Preview content */}
+                        <div className="px-4 py-4">
+                          {console.log('[Render] Confirmation message content:', message.content)}
+                          <div 
+                            style={{ 
+                              fontFamily: 'Inter, "Inter Fallback"',
+                              fontSize: '15px',
+                              lineHeight: '24px',
+                              fontWeight: 400,
+                              color: '#F1F2F5'
+                            }}
+                          >
+                            {message.content ? formatMessageContent(message.content) : <span className="text-gray-400">No preview content</span>}
+                          </div>
+                        </div>
+                        
+                        {/* Confirm/Cancel buttons */}
+                        <div className="px-4 py-3 bg-neutral-900/50 border-t border-amber-500/20 flex items-center gap-3">
+                          <button
+                            onClick={handleConfirmAction}
+                            disabled={isConfirming}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 disabled:bg-green-600/50 disabled:cursor-not-allowed text-white font-medium transition-colors"
+                          >
+                            <Check className="w-4 h-4" />
+                            {isConfirming ? 'Executing...' : 'Confirm'}
+                          </button>
+                          <button
+                            onClick={handleCancelAction}
+                            disabled={isConfirming}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-neutral-700 hover:bg-neutral-600 disabled:bg-neutral-700/50 disabled:cursor-not-allowed text-gray-200 font-medium transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                            Cancel
+                          </button>
+                          <span className="text-xs text-gray-500 ml-auto">
+                            Review the action above before confirming
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                        <span>
+                          {getAgentIcon((message as any).confirmationData?.agentName || '')} 
+                          {formatAgentName((message as any).confirmationData?.agentName || 'Agent')}
+                        </span>
+                        <span>•</span>
+                        <span>{message.timestamp.toLocaleTimeString()}</span>
+                      </div>
+                    </div>
+                  ) : (message as any).isCanceled ? (
+                    // Canceled action message
+                    <div className="max-w-3xl">
+                      <div className="rounded-2xl px-6 py-4 bg-neutral-800/50 border border-neutral-700">
+                        <div className="flex items-center gap-2 mb-2 text-gray-400">
+                          <X className="w-4 h-4" />
+                          <span className="font-medium">Action Canceled</span>
+                        </div>
+                        <div 
+                          style={{ 
+                            fontFamily: 'Inter, "Inter Fallback"',
+                            fontSize: '16px',
+                            lineHeight: '26px',
+                            fontWeight: 400,
+                            color: '#9CA3AF'
+                          }}
+                        >
+                          {message.content}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs text-gray-500">
+                        {message.timestamp.toLocaleTimeString()}
+                      </div>
+                    </div>
+                  ) : (message as any).isConfirmed ? (
+                    // Confirmed action preview (shown before execution response)
+                    <div className="max-w-3xl">
+                      <div className="rounded-2xl px-6 py-4 bg-green-500/10 border border-green-500/30">
+                        <div className="flex items-center gap-2 mb-2 text-green-400">
+                          <Check className="w-4 h-4" />
+                          <span className="font-medium">Action Confirmed</span>
+                        </div>
+                        <div 
+                          style={{ 
+                            fontFamily: 'Inter, "Inter Fallback"',
+                            fontSize: '15px',
+                            lineHeight: '24px',
+                            fontWeight: 400,
+                            color: '#D1D5DB'
+                          }}
+                        >
+                          {formatMessageContent(message.content)}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs text-gray-500">
+                        {message.timestamp.toLocaleTimeString()}
+                      </div>
                     </div>
                   ) : (
                     <div className="max-w-3xl">
