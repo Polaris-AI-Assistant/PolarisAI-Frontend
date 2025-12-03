@@ -136,7 +136,8 @@ export interface PendingAction {
 export async function processQueryStreaming(
   query: string,
   conversationHistory: ConversationMessage[] | undefined,
-  onChunk: (chunk: StreamChunk) => void
+  onChunk: (chunk: StreamChunk) => void,
+  conversationId?: string  // Optional: for artifact memory
 ): Promise<void> {
   // Import auth functions dynamically to avoid circular dependencies
   const { getAuthToken, refreshAuthToken } = await import('./auth');
@@ -158,6 +159,7 @@ export async function processQueryStreaming(
       body: JSON.stringify({
         query,
         conversationHistory,
+        conversationId,  // Pass conversationId for artifact memory
       }),
     });
   };

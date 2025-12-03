@@ -461,6 +461,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
         }
       ];
 
+      // Pass currentChatId as conversationId for artifact memory
       await processQueryStreaming(query, conversationHistory, (chunk: StreamChunk) => {
         switch (chunk.type) {
           case 'thinking':
@@ -585,7 +586,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             });
             break;
         }
-      });
+      }, currentChatId || undefined);  // Pass currentChatId for artifact memory
 
     } catch (error: any) {
       if (error.message && (error.message.includes('Session expired') || error.message.includes('Authentication required'))) {

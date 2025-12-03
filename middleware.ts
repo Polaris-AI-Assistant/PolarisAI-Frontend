@@ -13,7 +13,7 @@ export function middleware(request: NextRequest) {
   const protectedRoutes = ['/dashboard', '/profile', '/github', '/search'];
   
   // Auth routes that authenticated users shouldn't access
-  const authRoutes = ['/signin', '/signup', '/auth/signin', '/auth/signup'];
+  const authRoutes = ['/', '/signin', '/signup', '/auth/signin', '/auth/signup'];
   
   // Check if the current path is a protected route
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));

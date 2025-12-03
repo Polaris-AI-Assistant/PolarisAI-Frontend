@@ -3,7 +3,21 @@
 import { SignInPage, Testimonial } from "../landing_page/signin";
 import { useState, useEffect } from "react";
 import { useRouter } from 'next/navigation';
-import { isAuthenticated } from '../../lib/auth';
+import { isAuthenticated, getAuthToken, getRefreshToken } from '../../lib/auth';
+
+// Helper to sync localStorage auth tokens to cookies for middleware
+const syncAuthToCookies = () => {
+  const authToken = getAuthToken();
+  const refreshToken = getRefreshToken();
+  
+  if (authToken) {
+    const cookieOptions = `path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+    document.cookie = `auth_token=${authToken}; ${cookieOptions}`;
+    if (refreshToken) {
+      document.cookie = `refresh_token=${refreshToken}; ${cookieOptions}`;
+    }
+  }
+};
 
 const sampleTestimonials: Testimonial[] = [
   {
@@ -35,6 +49,8 @@ const SignInPageDemo = () => {
   useEffect(() => {
     // If already authenticated, redirect to dashboard
     if (isAuthenticated()) {
+      // Sync auth tokens to cookies for middleware
+      syncAuthToCookies();
       router.push('/dashboard');
     }
   }, [router]);
