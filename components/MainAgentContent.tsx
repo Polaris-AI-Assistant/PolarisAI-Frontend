@@ -48,8 +48,8 @@ import {
 } from '../lib/chatHistory';
 import { VercelV0Chat } from '@/components/ui/v0-ai-chat';
 import { ThinkingIndicator } from '@/components/ui/thinking-indicator';
-import { Calendar, FileText, ClipboardList, Github, Video, Check, X } from 'lucide-react';
-import { EventCard } from '@/components/ui/event-card';
+import { Calendar, FileText, ClipboardList, Github, Video, Check, X, Mail, AlertCircle } from 'lucide-react';
+import { MeetingCard } from '@/components/ui/meeting-card';
 
 // Helper function to format markdown-style text
 const formatMessageContent = (content: string) => {
@@ -179,75 +179,364 @@ const parseBoldText = (text: string, baseKey: number | string) => {
   return parts;
 };
 
-// Helper function to extract event information from message
-const extractEventInfo = (content: string) => {
-  const hasEventKeywords = /created|scheduled|event|meeting|google meet/i.test(content);
-  const isFormRelated = /form|survey|questionnaire|google forms/i.test(content);
+// Helper function to extract Google Meet meeting info from message
+const extractMeetingInfo = (content: string) => {
+  // Check if there's a Google Meet link in the content
+  const hasMeetLink = /https:\/\/meet\.google\.com\/[a-z0-9\-]+/i.test(content);
   
-  if (!hasEventKeywords || isFormRelated) return null;
+  if (!hasMeetLink) return null;
+  
+  // Check if this mentions creating a meeting/event with Google Meet
+  const isMeetCreation = /(?:google meet|meeting|video call).*(?:created|ready|has been created|scheduled)/i.test(content) ||
+                        /your.*(?:meet|meeting|event).*created/i.test(content) ||
+                        /created.*(?:meet|meeting|event)/i.test(content) ||
+                        /successfully created/i.test(content) ||
+                        /google meet link:/i.test(content) ||
+                        /join.*meeting/i.test(content);
+  
+  if (!isMeetCreation) return null;
+  
+  const meetingInfo: {
+    title?: string;
+    date?: string;
+    time?: string;
+    meetingCode?: string;
+    meetingLink?: string;
+    host?: string;
+    hostEmail?: string;
+  } = {};
 
-  const eventInfo: any = {};
-
-  const titleMatch = content.match(/Event Title[:\s]+\*\*([^*\n]+)\*\*/i) ||
-                     content.match(/Event Title[:\s]+([^\n]+)/i) || 
-                     content.match(/(?:created|scheduled)\s+(?:event|meeting)[:\s]+["']?([^"'\n]+)["']?/i) ||
-                     content.match(/^\*\*([^*]+)\*\*/m);
-  if (titleMatch) {
-    eventInfo.title = titleMatch[1].trim().replace(/\*\*/g, '');
-  }
-
-  const dateMatch = content.match(/(?:Date & Time|Date)[:\s]+([A-Za-z]+,\s+[A-Za-z]+\s+\d{1,2},\s+\d{4})/i) ||
-                    content.match(/((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,\s+\w+\s+\d{1,2},\s+\d{4})/i) ||
-                    content.match(/(\w+,\s+\w+\s+\d{1,2},\s+\d{4})/i) ||
-                    content.match(/(\w+\s+\d{1,2},\s+\d{4})/);
-  if (dateMatch) {
-    eventInfo.date = dateMatch[1].trim().replace(/\*\*/g, '');
-  }
-
-  const timeMatch = content.match(/(\d{1,2}:\d{2}\s*(?:AM|PM)\s*(?:GMT[+\-]\d+:\d+)?\s*-\s*\d{1,2}:\d{2}\s*(?:AM|PM)\s*(?:GMT[+\-]\d+:\d+)?)/i);
-  if (timeMatch) {
-    eventInfo.time = timeMatch[1].trim().replace(/\*\*/g, '');
-  }
-
-  const durationMatch = content.match(/Duration[:\s]+([^\n]+)/i) ||
-                        content.match(/\*\*\s*(\d+\s*(?:hour|hr|minute|min)s?)\s*\*\*/i);
-  if (durationMatch) {
-    let duration = durationMatch[1].trim().replace(/\*\*/g, '');
-    duration = duration.replace(/\bhr\b/gi, 'hour').replace(/\bmin\b/gi, 'minute');
-    if (!duration.match(/hours?|minutes?/i)) {
-      duration = duration.replace(/(\d+)\s*(hour|minute)/gi, (match, num, unit) => {
-        return parseInt(num) > 1 ? `${num} ${unit}s` : `${num} ${unit}`;
-      });
-    }
-    eventInfo.duration = `Duration: ${duration}`;
-  }
-
-  const meetLinkMatch = content.match(/https:\/\/meet\.google\.com\/[a-z0-9\-]+/i);
+  // Extract meeting link and code
+  const meetLinkMatch = content.match(/https:\/\/meet\.google\.com\/([a-z0-9\-]+)/i);
   if (meetLinkMatch) {
-    eventInfo.meetLink = meetLinkMatch[0];
-    eventInfo.location = meetLinkMatch[0];
-  } else {
-    const locationMatch = content.match(/Location[:\s]+([^\n]+)/i);
-    if (locationMatch) {
-      eventInfo.location = locationMatch[1].trim();
+    meetingInfo.meetingLink = meetLinkMatch[0];
+    meetingInfo.meetingCode = meetLinkMatch[1]; // Extract the code part (abc-defg-hij)
+  }
+
+  // Extract title - look for various patterns
+  // Pattern 1: "Event Title:" or "**Event Title:**"
+  const eventTitleMatch = content.match(/\*?\*?Event Title:?\*?\*?\s*([^\n*]+)/i);
+  if (eventTitleMatch) {
+    const title = eventTitleMatch[1].trim().replace(/\*\*/g, '');
+    // Validate title isn't just date/time info
+    const isJustDateTime = /^(\d|at|on|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december|\s|st|nd|rd|th|am|pm|:|-|,|\.)+$/i.test(title);
+    if (title && !isJustDateTime && title.toLowerCase() !== 'new event' && title.toLowerCase() !== 'event') {
+      meetingInfo.title = title;
+    }
+  }
+  
+  // Pattern 2: Bold title or meeting name
+  if (!meetingInfo.title) {
+    const titleMatch = content.match(/(?:created|scheduled).*?["']([^"']+)["']/i) ||
+                       content.match(/event.*?["']([^"']+)["']/i);
+    if (titleMatch) {
+      const title = titleMatch[1].trim();
+      const isJustDateTime = /^(\d|at|on|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december|\s|st|nd|rd|th|am|pm|:|-|,|\.)+$/i.test(title);
+      if (!isJustDateTime && !/successfully|created|your/i.test(title)) {
+        meetingInfo.title = title;
+      }
     }
   }
 
-  const attendeesMatch = content.match(/Attendees[:\s]+\((\d+)\)[:\s]*\n?([^\n]+(?:\n(?!Location|Date|Event)[^\n]+)*)/i);
-  if (attendeesMatch) {
-    const attendeesText = attendeesMatch[2];
-    const attendeesList = attendeesText
-      .split(/[,\n]/)
-      .map(a => a.trim())
-      .filter(a => a && a.includes('@'));
-    eventInfo.attendees = attendeesList;
+  // Extract date
+  const dateMatch = content.match(/\*?\*?Date:?\*?\*?\s*([A-Za-z]+,?\s+[A-Za-z]+\s+\d{1,2},?\s+\d{4})/i) ||
+                    content.match(/((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s+\w+\s+\d{1,2},?\s+\d{4})/i) ||
+                    content.match(/(\w+day,\s+\w+\s+\d{1,2},\s+\d{4})/i);
+  if (dateMatch) {
+    meetingInfo.date = dateMatch[1].trim().replace(/\*\*/g, '');
   }
 
-  if (eventInfo.title || (eventInfo.date && eventInfo.time)) {
-    return eventInfo;
+  // Extract time
+  const timeMatch = content.match(/\*?\*?Time:?\*?\*?\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?(?:\s*-\s*\d{1,2}:\d{2}\s*(?:AM|PM)?)?)/i) ||
+                    content.match(/(\d{1,2}:\d{2}\s*(?:AM|PM)\s*-\s*\d{1,2}:\d{2}\s*(?:AM|PM))/i);
+  if (timeMatch) {
+    meetingInfo.time = timeMatch[1].trim().replace(/\*\*/g, '');
+  }
+
+  // Extract host/email from the response
+  const hostMatch = content.match(/(?:host|organizer|created by|your account)[:\s]+([^\n]+)/i);
+  if (hostMatch) {
+    const hostValue = hostMatch[1].trim().replace(/[*"']/g, '');
+    if (hostValue.includes('@')) {
+      meetingInfo.hostEmail = hostValue;
+    } else {
+      meetingInfo.host = hostValue;
+    }
+  }
+
+  // Only return if we have a meeting link (essential for a meeting card)
+  if (meetingInfo.meetingLink) {
+    return meetingInfo;
   }
 
   return null;
+};
+
+// Preview Content Renderer - Parses confirmation preview and renders beautifully
+const PreviewContentRenderer = ({ content, actionType }: { content: string; actionType?: string }) => {
+  const lines = content.split('\n').filter(line => line.trim());
+  
+  // Determine the icon and color scheme based on action type
+  const getActionConfig = (type?: string) => {
+    switch (type) {
+      case 'send_email':
+        return { 
+          icon: <Mail className="w-5 h-5 text-red-400" />, 
+          iconBg: 'bg-red-500/10',
+          labelColor: 'text-gray-400'
+        };
+      case 'create_event':
+        return { 
+          icon: <Calendar className="w-5 h-5 text-blue-400" />, 
+          iconBg: 'bg-blue-500/10',
+          labelColor: 'text-gray-400'
+        };
+      case 'create_document':
+        return { 
+          icon: <FileText className="w-5 h-5 text-blue-400" />, 
+          iconBg: 'bg-blue-500/10',
+          labelColor: 'text-gray-400'
+        };
+      case 'create_form':
+        return { 
+          icon: <ClipboardList className="w-5 h-5 text-purple-400" />, 
+          iconBg: 'bg-purple-500/10',
+          labelColor: 'text-gray-400'
+        };
+      case 'create_meeting':
+        return { 
+          icon: <Video className="w-5 h-5 text-green-400" />, 
+          iconBg: 'bg-green-500/10',
+          labelColor: 'text-gray-400'
+        };
+      case 'create_repository':
+      case 'create_issue':
+        return { 
+          icon: <Github className="w-5 h-5 text-gray-300" />, 
+          iconBg: 'bg-gray-500/10',
+          labelColor: 'text-gray-400'
+        };
+      default:
+        return { 
+          icon: <AlertCircle className="w-5 h-5 text-gray-400" />, 
+          iconBg: 'bg-gray-500/10',
+          labelColor: 'text-gray-400'
+        };
+    }
+  };
+
+  const config = getActionConfig(actionType);
+  
+  // Parse the content into structured data
+  const parseContent = () => {
+    const parsed: { 
+      header?: string; 
+      fields: Array<{ label: string; value: string; isBody?: boolean }>;
+      questions?: Array<{ number: string; text: string; options?: string[] }>;
+    } = { fields: [] };
+    
+    let currentQuestion: { number: string; text: string; options?: string[] } | null = null;
+    let bodyContent = '';
+    let inBody = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const cleanLine = line.replace(/\*\*/g, '').trim();
+      
+      // Skip header lines with emojis
+      if (cleanLine.match(/^[📅📄📝📊📋✉️📹🗑️🔗⚡🔀]\s+/)) {
+        parsed.header = cleanLine.replace(/^[📅📄📝📊📋✉️📹🗑️🔗⚡🔀]\s+/, '');
+        continue;
+      }
+      
+      // Check for field patterns like "**To:** value" or "To: value"
+      const fieldMatch = cleanLine.match(/^([A-Za-z\s\/]+):\s*(.*)$/);
+      if (fieldMatch && !inBody) {
+        const [, label, value] = fieldMatch;
+        const trimmedLabel = label.trim();
+        
+        // Check if this starts a body/content section
+        if (['Intent/Content', 'Content', 'Body', 'Initial Content', 'Description'].includes(trimmedLabel)) {
+          inBody = true;
+          if (value.trim()) {
+            bodyContent = value.trim();
+          }
+          continue;
+        }
+        
+        if (value.trim()) {
+          parsed.fields.push({ label: trimmedLabel, value: value.trim() });
+        }
+        continue;
+      }
+      
+      // Handle body content
+      if (inBody) {
+        // Skip AI generation notes
+        if (cleanLine.includes('AI will') || cleanLine.startsWith('_')) {
+          continue;
+        }
+        bodyContent += (bodyContent ? '\n' : '') + cleanLine;
+        continue;
+      }
+      
+      // Handle numbered questions (for forms)
+      const questionMatch = cleanLine.match(/^(\d+)\.\s*([📝📄🔘☑️📋⭐📅🕐❓]?\s*)(.+)$/);
+      if (questionMatch) {
+        if (currentQuestion) {
+          if (!parsed.questions) parsed.questions = [];
+          parsed.questions.push(currentQuestion);
+        }
+        currentQuestion = { number: questionMatch[1], text: questionMatch[3], options: [] };
+        continue;
+      }
+      
+      // Handle question options
+      if (currentQuestion && cleanLine.match(/^[•·]\s+(.+)$/)) {
+        const optionMatch = cleanLine.match(/^[•·]\s+(.+)$/);
+        if (optionMatch && currentQuestion.options) {
+          currentQuestion.options.push(optionMatch[1]);
+        }
+        continue;
+      }
+    }
+    
+    // Add last question if exists
+    if (currentQuestion) {
+      if (!parsed.questions) parsed.questions = [];
+      parsed.questions.push(currentQuestion);
+    }
+    
+    // Add body content if exists
+    if (bodyContent.trim()) {
+      parsed.fields.push({ label: 'Content', value: bodyContent.trim(), isBody: true });
+    }
+    
+    return parsed;
+  };
+
+  const parsed = parseContent();
+
+  // Special handling for email action type - render like Bhindi
+  if (actionType === 'send_email') {
+    const toField = parsed.fields.find(f => f.label.toLowerCase() === 'to');
+    const ccField = parsed.fields.find(f => f.label.toLowerCase() === 'cc');
+    const bccField = parsed.fields.find(f => f.label.toLowerCase() === 'bcc');
+    const subjectField = parsed.fields.find(f => f.label.toLowerCase() === 'subject');
+    const bodyField = parsed.fields.find(f => f.isBody);
+
+    return (
+      <div className="space-y-0">
+        {/* Gmail Header with icon and recipient */}
+        <div className="flex items-center gap-3 pb-4 border-b border-[#2a2a2a]">
+          <div className="w-11 h-11 rounded-xl bg-red-500/10 flex items-center justify-center overflow-hidden">
+            <img 
+              src="/gmail.png" 
+              alt="Gmail" 
+              className="w-6 h-6 object-contain"
+              onError={(e) => {
+                // Fallback to Mail icon if image fails to load
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.parentElement?.classList.add('fallback-icon');
+              }}
+            />
+          </div>
+          <div className="flex-1">
+            <span className="text-gray-500 text-xs">To:</span>
+            <p className="text-emerald-400 font-medium text-sm">{toField?.value || 'No recipient'}</p>
+          </div>
+          <span className="text-xs text-gray-500 bg-[#252525] px-2.5 py-1 rounded-md font-mono">sendEmail</span>
+        </div>
+        
+        {/* CC/BCC if present */}
+        {(ccField || bccField) && (
+          <div className="flex gap-6 py-3 border-b border-[#2a2a2a]">
+            {ccField && (
+              <div>
+                <span className="text-gray-500 text-xs">CC: </span>
+                <span className="text-gray-300 text-xs">{ccField.value}</span>
+              </div>
+            )}
+            {bccField && (
+              <div>
+                <span className="text-gray-500 text-xs">BCC: </span>
+                <span className="text-gray-300 text-xs">{bccField.value}</span>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Subject */}
+        <div className="py-4 border-b border-[#2a2a2a]">
+          <p className="text-gray-500 text-xs mb-1.5">Subject</p>
+          <p className="text-white font-medium text-[15px]">{subjectField?.value || 'No subject'}</p>
+        </div>
+        
+        {/* Email Body */}
+        {bodyField && bodyField.value && (
+          <div className="pt-4">
+            <p className="text-gray-500 text-xs mb-2">Email Content</p>
+            <div className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed bg-[#141414] rounded-xl p-4 border border-[#252525]">
+              {bodyField.value}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // For other action types - render as clean card
+  return (
+    <div className="space-y-3">
+      {/* Fields */}
+      {parsed.fields.filter(f => !f.isBody).map((field, idx) => (
+        <div key={idx} className="flex items-start gap-3">
+          <span className="text-gray-500 text-sm min-w-[100px] flex-shrink-0">{field.label}:</span>
+          <span className={`text-sm ${field.label.toLowerCase() === 'title' || field.label.toLowerCase() === 'name' ? 'text-white font-medium' : 'text-gray-300'}`}>
+            {field.value}
+          </span>
+        </div>
+      ))}
+      
+      {/* Questions (for forms) */}
+      {parsed.questions && parsed.questions.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-[#2a2a2a]">
+          <p className="text-gray-400 text-xs uppercase tracking-wide mb-3">Questions</p>
+          <div className="space-y-3">
+            {parsed.questions.map((q, idx) => (
+              <div key={idx} className="bg-[#141414] rounded-lg p-3 border border-[#252525]">
+                <div className="flex items-start gap-2">
+                  <span className="text-emerald-400 font-medium text-sm">{q.number}.</span>
+                  <div className="flex-1">
+                    <p className="text-gray-200 text-sm">{q.text}</p>
+                    {q.options && q.options.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {q.options.map((opt, optIdx) => (
+                          <div key={optIdx} className="flex items-center gap-2 text-xs text-gray-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-600"></span>
+                            {opt}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* Body content */}
+      {parsed.fields.find(f => f.isBody) && (
+        <div className="mt-3 pt-3 border-t border-[#2a2a2a]">
+          <div className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed bg-[#141414] rounded-lg p-3 border border-[#252525]">
+            {parsed.fields.find(f => f.isBody)?.value}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 interface MainAgentContentProps {
@@ -928,131 +1217,155 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                       <div className="whitespace-pre-wrap">{message.content}</div>
                     </div>
                   ) : (message as any).isPendingConfirmation ? (
-                    // Confirmation request message with Confirm/Cancel buttons
-                    <div className="max-w-3xl">
-                      <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 overflow-hidden">
-                        {/* Header */}
-                        <div className="px-4 py-3 bg-amber-500/20 border-b border-amber-500/30 flex items-center gap-2">
-                          <span className="text-xl">
-                            {getActionTypeIcon((message as any).confirmationData?.actionType || 'unknown')}
-                          </span>
-                          <span className="font-semibold text-amber-200">
-                            {(message as any).confirmationData?.description || 'Action Requires Confirmation'}
+                    // Confirmation request message - Bhindi.io style design
+                    <div className="max-w-3xl w-full">
+                      {/* Preview Card - Sleek dark container */}
+                      <div className="rounded-2xl bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden shadow-xl">
+                        {/* Action Type Header - Bhindi style with icon and colored badge */}
+                        <div className="px-5 py-3.5 flex items-center justify-between border-b border-[#2a2a2a]">
+                          <div className="flex items-center gap-2.5">
+                            {(message as any).confirmationData?.actionType === 'send_email' ? (
+                              <div className="w-5 h-5 bg-red-500/20 rounded flex items-center justify-center">
+                                <Mail className="w-3 h-3 text-red-400" />
+                              </div>
+                            ) : (
+                              <span className="text-lg">
+                                {getActionTypeIcon((message as any).confirmationData?.actionType || 'unknown')}
+                              </span>
+                            )}
+                            <span className="text-sm font-medium text-white">
+                              {(message as any).confirmationData?.description || 'Action Preview'}
+                            </span>
+                          </div>
+                          <span className={`text-xs font-medium px-2.5 py-1 rounded-md ${
+                            (message as any).confirmationData?.agentName === 'gmail' 
+                              ? 'text-emerald-400 bg-emerald-400/10' 
+                              : (message as any).confirmationData?.agentName === 'calendar'
+                              ? 'text-blue-400 bg-blue-400/10'
+                              : 'text-gray-400 bg-gray-400/10'
+                          }`}>
+                            {formatAgentName((message as any).confirmationData?.agentName || 'agent')}
                           </span>
                         </div>
                         
-                        {/* Preview content */}
-                        <div className="px-4 py-4">
-                          {console.log('[Render] Confirmation message content:', message.content)}
+                        {/* Preview Content - Clean formatted display */}
+                        <div className="p-5">
                           <div 
+                            className="space-y-3"
                             style={{ 
                               fontFamily: 'Inter, "Inter Fallback"',
-                              fontSize: '15px',
-                              lineHeight: '24px',
-                              fontWeight: 400,
-                              color: '#F1F2F5'
+                              fontSize: '14px',
+                              lineHeight: '22px',
                             }}
                           >
-                            {message.content ? formatMessageContent(message.content) : <span className="text-gray-400">No preview content</span>}
+                            {message.content ? (
+                              <PreviewContentRenderer content={message.content} actionType={(message as any).confirmationData?.actionType} />
+                            ) : (
+                              <span className="text-gray-500">No preview content available</span>
+                            )}
                           </div>
-                        </div>
-                        
-                        {/* Confirm/Cancel buttons */}
-                        <div className="px-4 py-3 bg-neutral-900/50 border-t border-amber-500/20 flex items-center gap-3">
-                          <button
-                            onClick={handleConfirmAction}
-                            disabled={isConfirming}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 disabled:bg-green-600/50 disabled:cursor-not-allowed text-white font-medium transition-colors"
-                          >
-                            <Check className="w-4 h-4" />
-                            {isConfirming ? 'Executing...' : 'Confirm'}
-                          </button>
-                          <button
-                            onClick={handleCancelAction}
-                            disabled={isConfirming}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-neutral-700 hover:bg-neutral-600 disabled:bg-neutral-700/50 disabled:cursor-not-allowed text-gray-200 font-medium transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                            Cancel
-                          </button>
-                          <span className="text-xs text-gray-500 ml-auto">
-                            Review the action above before confirming
-                          </span>
                         </div>
                       </div>
                       
-                      <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                        <span>
-                          {getAgentIcon((message as any).confirmationData?.agentName || '')} 
-                          {formatAgentName((message as any).confirmationData?.agentName || 'Agent')}
-                        </span>
-                        <span>•</span>
-                        <span>{message.timestamp.toLocaleTimeString()}</span>
+                      {/* Confirmation Bar - Separate elegant container */}
+                      <div className="mt-3 rounded-xl bg-[#141414] border border-[#252525] px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-5 h-5 rounded-full border border-gray-600 flex items-center justify-center">
+                            <AlertCircle className="w-3 h-3 text-gray-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-200">Confirmation Required</p>
+                            <p className="text-xs text-gray-500">Task paused due to pending confirmation. Click on confirm to proceed.</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleCancelAction}
+                            disabled={isConfirming}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#252525] hover:bg-[#303030] disabled:opacity-50 disabled:cursor-not-allowed text-gray-300 text-sm font-medium transition-all duration-200"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            Skip
+                          </button>
+                          <button
+                            onClick={handleConfirmAction}
+                            disabled={isConfirming}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-all duration-200 shadow-lg shadow-emerald-600/20"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            {isConfirming ? 'Processing...' : 'Confirm'}
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-2 text-xs text-gray-600 text-right">
+                        {message.timestamp.toLocaleTimeString()}
                       </div>
                     </div>
                   ) : (message as any).isCanceled ? (
-                    // Canceled action message
-                    <div className="max-w-3xl">
-                      <div className="rounded-2xl px-6 py-4 bg-neutral-800/50 border border-neutral-700">
-                        <div className="flex items-center gap-2 mb-2 text-gray-400">
-                          <X className="w-4 h-4" />
-                          <span className="font-medium">Action Canceled</span>
-                        </div>
-                        <div 
-                          style={{ 
-                            fontFamily: 'Inter, "Inter Fallback"',
-                            fontSize: '16px',
-                            lineHeight: '26px',
-                            fontWeight: 400,
-                            color: '#9CA3AF'
-                          }}
-                        >
-                          {message.content}
+                    // Canceled action message - Minimal style
+                    <div className="max-w-3xl w-full">
+                      <div className="rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-gray-500/10 flex items-center justify-center">
+                            <X className="w-4 h-4 text-gray-400" />
+                          </div>
+                          <div>
+                            <span className="text-sm font-medium text-gray-400">Action Skipped</span>
+                            <p className="text-xs text-gray-600 mt-0.5">The action was not executed</p>
+                          </div>
                         </div>
                       </div>
-                      <div className="mt-2 text-xs text-gray-500">
+                      <div className="mt-2 text-xs text-gray-600 text-right">
                         {message.timestamp.toLocaleTimeString()}
                       </div>
                     </div>
                   ) : (message as any).isConfirmed ? (
-                    // Confirmed action preview (shown before execution response)
-                    <div className="max-w-3xl">
-                      <div className="rounded-2xl px-6 py-4 bg-green-500/10 border border-green-500/30">
-                        <div className="flex items-center gap-2 mb-2 text-green-400">
-                          <Check className="w-4 h-4" />
-                          <span className="font-medium">Action Confirmed</span>
+                    // Confirmed action message - Success style
+                    <div className="max-w-3xl w-full">
+                      <div className="rounded-xl bg-[#1a1a1a] border border-emerald-500/20 px-5 py-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                            <Check className="w-4 h-4 text-emerald-400" />
+                          </div>
+                          <div>
+                            <span className="text-sm font-medium text-emerald-400">Action Confirmed</span>
+                            <p className="text-xs text-gray-500 mt-0.5">Executing your request...</p>
+                          </div>
                         </div>
                         <div 
+                          className="pl-11 text-sm text-gray-400"
                           style={{ 
                             fontFamily: 'Inter, "Inter Fallback"',
-                            fontSize: '15px',
-                            lineHeight: '24px',
-                            fontWeight: 400,
-                            color: '#D1D5DB'
+                            lineHeight: '22px',
                           }}
                         >
                           {formatMessageContent(message.content)}
                         </div>
                       </div>
-                      <div className="mt-2 text-xs text-gray-500">
+                      <div className="mt-2 text-xs text-gray-600 text-right">
                         {message.timestamp.toLocaleTimeString()}
                       </div>
                     </div>
                   ) : (
                     <div className="max-w-3xl">
                       {(() => {
-                        const eventInfo = extractEventInfo(message.content);
-                        return eventInfo ? (
-                          <EventCard
-                            title={eventInfo.title || 'Event'}
-                            date={eventInfo.date || ''}
-                            time={eventInfo.time || ''}
-                            duration={eventInfo.duration}
-                            location={eventInfo.location}
-                            meetLink={eventInfo.meetLink}
-                            attendees={eventInfo.attendees}
-                          />
-                        ) : null;
+                        // Check for meeting creation (Google Meet)
+                        const meetingInfo = extractMeetingInfo(message.content);
+                        if (meetingInfo) {
+                          return (
+                            <MeetingCard
+                              title={meetingInfo.title}
+                              date={meetingInfo.date}
+                              time={meetingInfo.time}
+                              meetingCode={meetingInfo.meetingCode}
+                              meetingLink={meetingInfo.meetingLink}
+                              host={meetingInfo.host}
+                              hostEmail={meetingInfo.hostEmail}
+                            />
+                          );
+                        }
+                        return null;
                       })()}
                       
                       <div 
