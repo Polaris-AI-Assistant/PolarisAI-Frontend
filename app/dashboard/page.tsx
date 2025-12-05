@@ -82,6 +82,7 @@ function Dashboard() {
     const newSession = await createNewChatSession()
     if (newSession) {
       setCurrentChatId(newSession.id)
+      setActiveTab('MainAgent') // Switch to MainAgent tab after creating new chat
       await loadChatHistory()
     }
   }, [loadChatHistory, currentChatId, groupedChats])

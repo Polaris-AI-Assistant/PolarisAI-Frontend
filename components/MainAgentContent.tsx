@@ -35,6 +35,7 @@ import {
   ConfirmationRequest,
   confirmActionStreaming,
   cancelAction,
+  UserLocation,
 } from '../lib/mainAgent';
 import {
   ChatMessage,
@@ -46,10 +47,14 @@ import {
   migrateOldConversation,
   GroupedChats,
 } from '../lib/chatHistory';
+import { addMemory } from '../lib/memory';
+import { getUserLocation, requiresLocation } from '../lib/geolocation';
+import { useLocationStore } from '../lib/stores/locationStore';
 import { VercelV0Chat } from '@/components/ui/v0-ai-chat';
 import { ThinkingIndicator } from '@/components/ui/thinking-indicator';
-import { Calendar, FileText, ClipboardList, Github, Video, Check, X, Mail, AlertCircle } from 'lucide-react';
+import { Calendar, FileText, ClipboardList, Github, Video, Check, X, Mail, AlertCircle, Brain } from 'lucide-react';
 import { MeetingCard } from '@/components/ui/meeting-card';
+import { FlightResultsInline, FlightData } from '@/components/ui/flight-results-card';
 
 // Helper function to format markdown-style text
 const formatMessageContent = (content: string) => {
@@ -270,6 +275,310 @@ const extractMeetingInfo = (content: string) => {
   }
 
   return null;
+};
+
+// Helper function to extract flight info from message content
+const extractFlightInfo = (content: string): FlightData | null => {
+  // Check if this is a flight search response
+  const isFlightResponse = 
+    /(?:found|here are|showing|available).*flights?/i.test(content) ||
+    /flights?.*(?:from|between|to)/i.test(content) ||
+    /₹[\d,]+/i.test(content) ||
+    /(?:indigo|air india|spicejet|vistara|akasa|goair|airindia|emirates|lufthansa|british airways|qatar|singapore|etihad)/i.test(content) ||
+    /(?:best flight|flight option|other flight)/i.test(content);
+    
+  if (!isFlightResponse) return null;
+
+  // Extract route info - look for "Pune to Indore" or "from Pune to Indore" or "Pune (PNQ) to Indore (IDR)"
+  // Be careful to not capture trailing words like "for", "on", etc.
+  const routeMatch = content.match(/(?:from\s+)?([A-Z][a-z]+)\s*(?:\([A-Z]{3}\))?\s+to\s+([A-Z][a-z]+)(?:\s*\([A-Z]{3}\))?/i) ||
+                     content.match(/([A-Z]{3})\s*[-→]\s*([A-Z]{3})/i) ||
+                     content.match(/(?:flights?\s+from\s+)([A-Z][a-z]+)\s+to\s+([A-Z][a-z]+)/i);
+  
+  // Extract date - look for "December 16, 2025" format
+  const dateMatch = content.match(/((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})/i) ||
+                    content.match(/(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*,?\s*\d{4})/i) ||
+                    content.match(/(\d{4}-\d{2}-\d{2})/i);
+
+  // Parse individual flight entries using the structured format from AI
+  const flights: Array<{
+    airline: string;
+    flightNumber?: string;
+    price: number;
+    departureTime: string;
+    arrivalTime: string;
+    duration: string;
+    stops: number;
+  }> = [];
+
+  // Extract using structured patterns matching AI response format:
+  // - **Airline:** IndiGo
+  // - **Flight Number:** 6E 284  
+  // - **Price:** ₹6,048
+  // - **Departure:** 05:15 AM from Pune International Airport (PNQ)
+  // - **Arrival:** 06:40 AM at Devi Ahilyabai Holkar International Airport (IDR)
+  
+  // Airline code to name mapping
+  const airlineCodeMap: Record<string, string> = {
+    '6E': 'IndiGo',
+    'AI': 'Air India',
+    'SG': 'SpiceJet',
+    'UK': 'Vistara',
+    'QP': 'Akasa Air',
+    'G8': 'Go First',
+    'I5': 'AirAsia India',
+    'IX': 'Air India Express',
+    '9I': 'Alliance Air',
+    'EK': 'Emirates',
+    'QR': 'Qatar Airways',
+    'SQ': 'Singapore Airlines',
+    'LH': 'Lufthansa',
+    'BA': 'British Airways',
+    'EY': 'Etihad'
+  };
+
+  // Find flight numbers first - match "Flight Number: 6E 284" or standalone "6E284", "AI1804"
+  const flightNumbers: string[] = [];
+  const fnMatches = content.matchAll(/(?:\*\*)?(?:flight\s*(?:number|no\.?)?)(?:\*\*)?[:\s]+\*?\*?([A-Z]{1,2}\s*\d{2,4})(?:\*\*)?/gi);
+  for (const m of fnMatches) {
+    flightNumbers.push(m[1].replace(/\s+/g, ''));
+  }
+
+  // Find all airlines - multiple patterns
+  const airlines: string[] = [];
+  
+  // Pattern 1: Numbered list with bold airline name "1. **IndiGo**" or "1. IndiGo"
+  const numberedAirlineMatches = content.matchAll(/\d+\.\s*\*?\*?(IndiGo|Air India|SpiceJet|Vistara|Akasa Air|Go First|AirAsia|Emirates|Qatar Airways|Singapore Airlines|Lufthansa|British Airways|Etihad)\*?\*?/gi);
+  for (const m of numberedAirlineMatches) {
+    airlines.push(m[1].trim());
+  }
+  
+  // Pattern 2: "Airline: IndiGo" or "**Airline:** IndiGo"
+  if (airlines.length === 0) {
+    const airlineMatches = content.matchAll(/(?:\*\*)?(?:airline|carrier)(?:\*\*)?[:\s*]+\*?\*?(IndiGo|Air India|SpiceJet|Vistara|Akasa Air|Go First|AirAsia|Emirates|Qatar Airways|Singapore Airlines|Lufthansa|British Airways|Etihad)\*?\*?/gi);
+    for (const m of airlineMatches) {
+      airlines.push(m[1].trim());
+    }
+  }
+
+  // Pattern 3: If still no airlines, derive from flight numbers
+  if (airlines.length === 0 && flightNumbers.length > 0) {
+    for (const fn of flightNumbers) {
+      const code = fn.match(/^([A-Z]{1,2})/i)?.[1]?.toUpperCase() || '';
+      const airlineName = airlineCodeMap[code] || 'Airline';
+      airlines.push(airlineName);
+    }
+  }
+  
+  // Pattern 4: Match bold standalone airline names "**IndiGo**" followed by flight details
+  if (airlines.length === 0) {
+    const boldAirlineMatches = content.matchAll(/\*\*(IndiGo|Air India|SpiceJet|Vistara|Akasa Air|Go First|AirAsia)\*\*/gi);
+    for (const m of boldAirlineMatches) {
+      airlines.push(m[1].trim());
+    }
+  }
+
+  // Find prices - match "Price: ₹6,048" or "₹6048" - MUST have 3+ digits
+  const prices: number[] = [];
+  const priceMatches = content.matchAll(/(?:\*\*)?(?:price|fare|cost)(?:\*\*)?[:\s]+\*?\*?₹?\s?([\d,]+)(?:\*\*)?/gi);
+  for (const m of priceMatches) {
+    const priceVal = parseInt(m[1].replace(/,/g, ''));
+    if (priceVal >= 100) { // Only accept reasonable prices (at least ₹100)
+      prices.push(priceVal);
+    }
+  }
+  
+  // Fallback: Find standalone prices like "₹6,048" with at least 3 digits
+  if (prices.length === 0) {
+    const standalonePriceMatches = content.matchAll(/₹\s?([\d,]{3,})/g);
+    for (const m of standalonePriceMatches) {
+      const priceVal = parseInt(m[1].replace(/,/g, ''));
+      if (priceVal >= 100) {
+        prices.push(priceVal);
+      }
+    }
+  }
+
+  // Find durations - match "Duration: 1h 25m" or "1 hr 25 min"
+  const durations: string[] = [];
+  const durMatches = content.matchAll(/(?:\*\*)?(?:duration|total\s*duration)(?:\*\*)?[:\s]+\*?\*?(\d+\s*h(?:r|ours?)?\s*\d*\s*m(?:in)?)/gi);
+  for (const m of durMatches) {
+    durations.push(m[1]);
+  }
+
+  // Find departures - match "Departure: 05:15 AM from Pune..."
+  const departures: { time: string }[] = [];
+  const depMatches = content.matchAll(/(?:\*\*)?(?:departure|depart)(?:\*\*)?[:\s]+\*?\*?(\d{1,2}:\d{2}\s*(?:AM|PM))/gi);
+  for (const m of depMatches) {
+    departures.push({ time: m[1] });
+  }
+
+  // Find arrivals - match "Arrival: 06:40 AM at Indore..."
+  const arrivals: { time: string }[] = [];
+  const arrMatches = content.matchAll(/(?:\*\*)?(?:arrival|arrive)(?:\*\*)?[:\s]+\*?\*?(\d{1,2}:\d{2}\s*(?:AM|PM))/gi);
+  for (const m of arrMatches) {
+    arrivals.push({ time: m[1] });
+  }
+
+  // Find stops - match "Stops: Direct flight" or "Direct" or "1 stop"
+  const stopsInfo: number[] = [];
+  const stopsMatches = content.matchAll(/(?:\*\*)?(?:stops?)(?:\*\*)?[:\s]+\*?\*?(direct|non-?stop|\d+\s*stops?)/gi);
+  for (const m of stopsMatches) {
+    const stopText = m[1].toLowerCase();
+    stopsInfo.push(stopText.includes('direct') || stopText.includes('non') ? 0 : parseInt(stopText) || 1);
+  }
+
+  // Build flight objects from extracted data
+  // Use flightNumbers.length as primary count since we can derive airlines from them
+  const maxFlights = Math.max(flightNumbers.length, airlines.length, prices.length);
+  for (let i = 0; i < maxFlights && i < 20; i++) {
+    // Get airline from explicit list, or derive from flight number
+    let airlineName = airlines[i];
+    if (!airlineName && flightNumbers[i]) {
+      const code = flightNumbers[i].match(/^([A-Z]{1,2})/i)?.[1]?.toUpperCase() || '';
+      airlineName = airlineCodeMap[code];
+    }
+    
+    // Skip if no airline and no price
+    if (!airlineName && !prices[i]) continue;
+    
+    flights.push({
+      airline: airlineName || 'Airline',
+      flightNumber: flightNumbers[i],
+      price: prices[i] || 0,
+      departureTime: departures[i]?.time || '',
+      arrivalTime: arrivals[i]?.time || '',
+      duration: durations[i] || '',
+      stops: stopsInfo[i] ?? 0
+    });
+  }
+
+  // Fallback: Try inline patterns like "IndiGo 6E284 - ₹6,048"
+  if (flights.length === 0) {
+    const inlineMatches = content.matchAll(/\b(IndiGo|Air India|SpiceJet|Vistara|Akasa|GoAir|Go First)\b\s*(?:flight\s*)?([A-Z0-9]{2}\s*\d{2,4})?\s*[-–]?\s*₹\s?([\d,]{3,})/gi);
+    for (const m of inlineMatches) {
+      flights.push({
+        airline: m[1].trim(),
+        flightNumber: m[2]?.replace(/\s/g, ''),
+        price: parseInt(m[3].replace(/,/g, '')),
+        departureTime: '',
+        arrivalTime: '',
+        duration: '',
+        stops: 0
+      });
+    }
+  }
+
+  // Only return if we found flights with valid prices
+  if (flights.length === 0 || !flights.some(f => f.price >= 100)) return null;
+
+  // Filter out flights with invalid prices
+  const validFlights = flights.filter(f => f.price >= 100);
+
+  // Get origin and destination
+  const origin = routeMatch ? routeMatch[1].trim() : 'Origin';
+  const destination = routeMatch ? routeMatch[2].trim() : 'Destination';
+
+  // Map to the nested structure expected by FlightResultsCard
+  const mapToFlightStructure = (f: typeof validFlights[0]) => ({
+    price: f.price,
+    total_duration: f.duration ? parseDurationToMinutes(f.duration) : 120,
+    flights: [{
+      airline: f.airline,
+      flight_number: f.flightNumber,
+      departure_airport: {
+        name: origin,
+        id: getAirportCode(origin),
+        time: f.departureTime
+      },
+      arrival_airport: {
+        name: destination,
+        id: getAirportCode(destination),
+        time: f.arrivalTime
+      },
+      duration: f.duration ? parseDurationToMinutes(f.duration) : 120,
+      airplane: 'Aircraft'
+    }],
+    layovers: f.stops > 0 ? Array(f.stops).fill({ name: 'Layover', duration: 60 }) : []
+  });
+
+  return {
+    from: origin,
+    to: destination,
+    date: dateMatch ? dateMatch[1] : new Date().toLocaleDateString(),
+    best_flights: validFlights.slice(0, 3).map(mapToFlightStructure),
+    other_flights: validFlights.slice(3).map(mapToFlightStructure)
+  };
+};
+
+// Helper to get airport code from city name
+const getAirportCode = (city: string): string => {
+  const codes: Record<string, string> = {
+    'pune': 'PNQ',
+    'indore': 'IDR',
+    'mumbai': 'BOM',
+    'delhi': 'DEL',
+    'bangalore': 'BLR',
+    'bengaluru': 'BLR',
+    'chennai': 'MAA',
+    'hyderabad': 'HYD',
+    'kolkata': 'CCU',
+    'ahmedabad': 'AMD',
+    'goa': 'GOI',
+    'jaipur': 'JAI',
+    'lucknow': 'LKO',
+    'kochi': 'COK',
+    'cochin': 'COK',
+    'patna': 'PAT',
+    'bhopal': 'BHO',
+    'nagpur': 'NAG',
+    'chandigarh': 'IXC',
+    'guwahati': 'GAU',
+    'srinagar': 'SXR',
+    'varanasi': 'VNS',
+    'coimbatore': 'CJB',
+    'trivandrum': 'TRV',
+    'thiruvananthapuram': 'TRV',
+    'mangalore': 'IXE',
+    'visakhapatnam': 'VTZ',
+    'raipur': 'RPR',
+    'ranchi': 'IXR',
+    'bhubaneswar': 'BBI',
+    'amritsar': 'ATQ',
+    'udaipur': 'UDR',
+    'jodhpur': 'JDH',
+    'madurai': 'IXM',
+    'tiruchirappalli': 'TRZ',
+    'trichy': 'TRZ'
+  };
+  const lowerCity = city.toLowerCase().trim();
+  return codes[lowerCity] || city.substring(0, 3).toUpperCase();
+};
+
+// Helper to calculate duration between two times
+const calculateDuration = (dep: string, arr: string): string => {
+  if (!dep || !arr) return '';
+  try {
+    const [depH, depM] = dep.split(':').map(Number);
+    const [arrH, arrM] = arr.split(':').map(Number);
+    let mins = (arrH * 60 + arrM) - (depH * 60 + depM);
+    if (mins < 0) mins += 24 * 60; // Handle overnight
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h}h ${m}m`;
+  } catch {
+    return '';
+  }
+};
+
+// Helper to parse duration string to minutes
+const parseDurationToMinutes = (duration: string): number => {
+  if (!duration) return 120;
+  const hMatch = duration.match(/(\d+)\s*h/i);
+  const mMatch = duration.match(/(\d+)\s*m/i);
+  const hours = hMatch ? parseInt(hMatch[1]) : 0;
+  const mins = mMatch ? parseInt(mMatch[1]) : 0;
+  return hours * 60 + mins || 120;
 };
 
 // Preview Content Renderer - Parses confirmation preview and renders beautifully
@@ -566,6 +875,9 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
   // Confirmation flow state
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationRequest | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
+  // Memory state - track which message pairs have been saved to memory
+  const [savedToMemory, setSavedToMemory] = useState<Set<string>>(new Set());
+  const [savingToMemory, setSavingToMemory] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const streamingContentRef = useRef<string>('');
@@ -613,6 +925,9 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
   // Handle chatId changes from parent (dashboard sidebar)
   useEffect(() => {
     if (chatId && chatId !== currentChatId) {
+      // Clear current messages immediately for better UX
+      setMessages([]);
+      setShowExamples(true);
       loadChatSession(chatId);
     }
   }, [chatId]);
@@ -712,6 +1027,52 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     setInput('');
     setShowExamples(false);
 
+    // Check if query requires user location
+    let userLocation: UserLocation | undefined = undefined;
+    
+    if (requiresLocation(query)) {
+      console.log('[Location] Query requires location, requesting...');
+      
+      // Try to get cached location first
+      const locationStore = useLocationStore.getState();
+      
+      if (locationStore.coords && !locationStore.isStale()) {
+        console.log('[Location] Using cached location');
+        userLocation = locationStore.coords;
+      } else {
+        // Request fresh location
+        console.log('[Location] Requesting fresh location from browser');
+        
+        // Show thinking message while requesting location
+        setIsThinking(true);
+        setThinkingMessage('Requesting your location...');
+        
+        const location = await getUserLocation();
+        
+        setIsThinking(false);
+        
+        if (location) {
+          console.log('[Location] Location granted:', location);
+          locationStore.setCoords(location.lat, location.lng);
+          userLocation = location;
+        } else {
+          console.log('[Location] Location denied or unavailable');
+          locationStore.setDenied(true);
+          
+          // Add system message explaining location denial
+          const systemMessage: ChatMessage = {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: '📍 **Location Required**\n\nTo search for places near you, I need access to your location. You can either:\n\n1. Enable location access in your browser settings and try again\n2. Specify your city or area in your query (e.g., "Find cafes in Manhattan" or "Restaurants near Central Park")',
+            timestamp: new Date(),
+          };
+          
+          setMessages((prev) => [...prev, systemMessage]);
+          return; // Don't proceed with query
+        }
+      }
+    }
+
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -750,8 +1111,11 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
         }
       ];
 
-      // Pass currentChatId as conversationId for artifact memory
-      await processQueryStreaming(query, conversationHistory, (chunk: StreamChunk) => {
+      // Pass currentChatId as conversationId for artifact memory and userLocation for Maps
+      await processQueryStreaming(
+        query, 
+        conversationHistory, 
+        (chunk: StreamChunk) => {
         switch (chunk.type) {
           case 'thinking':
             setIsThinking(chunk.status === 'start');
@@ -793,8 +1157,12 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             console.log('[Confirmation] Preview content:', chunk.previewContent);
             console.log('[Confirmation] Looking for message ID:', assistantMessageId);
             
-            // Store the preview content first
-            const confirmationPreview = chunk.previewContent || 'Action requires confirmation';
+            // Build the preview content with step indicator if part of a chain
+            let confirmationPreview = chunk.previewContent || 'Action requires confirmation';
+            if (chunk.chainInfo) {
+              const stepIndicator = `📋 **Step ${chunk.chainInfo.currentStep} of ${chunk.chainInfo.totalSteps}**\n\n`;
+              confirmationPreview = stepIndicator + confirmationPreview;
+            }
             
             // Update the assistant message to show the confirmation preview FIRST
             setMessages((prev) => {
@@ -824,7 +1192,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             setIsLoading(false);
             setStreamingMessageId(null);
             
-            // Store the confirmation request
+            // Store the confirmation request with chain info
             setPendingConfirmation({
               requestId: chunk.requestId!,
               toolName: chunk.toolName!,
@@ -834,6 +1202,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
               params: chunk.params || {},
               previewContent: chunk.previewContent!,
               originalQuery: chunk.originalQuery,
+              chainInfo: chunk.chainInfo,
             });
             break;
             
@@ -875,7 +1244,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             });
             break;
         }
-      }, currentChatId || undefined);  // Pass currentChatId for artifact memory
+      }, currentChatId || undefined, userLocation);  // Pass currentChatId for artifact memory and userLocation for Maps
 
     } catch (error: any) {
       if (error.message && (error.message.includes('Session expired') || error.message.includes('Authentication required'))) {
@@ -950,6 +1319,9 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       return [...updated, responseMessage];
     });
 
+    // Track if a new confirmation is received during streaming (for action chains)
+    let receivedNewConfirmation = false;
+
     try {
       await confirmActionStreaming(pendingConfirmation.requestId, (chunk: StreamChunk) => {
         switch (chunk.type) {
@@ -981,10 +1353,75 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             };
             break;
 
+          case 'confirmation_request':
+            // Handle next confirmation in chain - another action needs confirmation
+            console.log('[Confirmation] Received next confirmation in chain:', chunk);
+            receivedNewConfirmation = true;
+            
+            // First, finalize the current response message
+            const currentContent = streamingContentRef.current;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === responseMessageId
+                  ? { ...m, content: currentContent }
+                  : m
+              )
+            );
+            
+            // Create a new message for the next confirmation preview
+            const nextConfirmMessageId = `assistant-${Date.now()}-nextconfirm`;
+            const nextConfirmPreview = chunk.previewContent || 'Next action requires confirmation';
+            const chainInfo = chunk.chainInfo;
+            const stepIndicator = chainInfo ? `\n\n📋 **Step ${chainInfo.currentStep} of ${chainInfo.totalSteps}**` : '';
+            
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: nextConfirmMessageId,
+                role: 'assistant' as const,
+                content: stepIndicator + '\n\n' + nextConfirmPreview,
+                timestamp: new Date(),
+                isPendingConfirmation: true,
+                confirmationData: {
+                  requestId: chunk.requestId!,
+                  toolName: chunk.toolName!,
+                  agentName: chunk.agentName!,
+                  actionType: chunk.actionType!,
+                  description: chunk.description!,
+                }
+              } as any
+            ]);
+            
+            // Set the new pending confirmation
+            setPendingConfirmation({
+              requestId: chunk.requestId!,
+              toolName: chunk.toolName!,
+              agentName: chunk.agentName!,
+              actionType: chunk.actionType!,
+              description: chunk.description!,
+              params: chunk.params || {},
+              previewContent: nextConfirmPreview,
+              originalQuery: chunk.originalQuery,
+              chainInfo: chunk.chainInfo,
+            });
+            
+            // Reset states for the new confirmation
+            setIsThinking(false);
+            setIsConfirming(false);
+            streamingContentRef.current = '';
+            break;
+
           case 'error':
             throw new Error(chunk.error || chunk.message || 'Action execution failed');
 
           case 'done':
+            // Skip updating messages if we received a new confirmation (action chain)
+            // The new confirmation message is already set up
+            if (receivedNewConfirmation) {
+              console.log('[Confirmation] Skipping done handler - new confirmation received');
+              break;
+            }
+            
             const finalContent = streamingContentRef.current;
             const finalMetadata = { ...metadataRef.current };
 
@@ -1035,7 +1472,10 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       setIsConfirming(false);
       setIsThinking(false);
       setStreamingMessageId(null);
-      setPendingConfirmation(null);
+      // Only clear pendingConfirmation if we didn't receive a new one (action chain)
+      if (!receivedNewConfirmation) {
+        setPendingConfirmation(null);
+      }
       streamingContentRef.current = '';
       metadataRef.current = {};
       inputRef.current?.focus();
@@ -1132,6 +1572,80 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
           await handleNewChat();
         }
       }
+    }
+  };
+
+  /**
+   * Handle adding a conversation pair to long-term memory
+   */
+  const handleAddToMemory = async (assistantMessageId: string) => {
+    alert('Hello button clicked!'); // Debug alert
+    
+    console.log('[Memory] handleAddToMemory called with:', assistantMessageId);
+    
+    // Find the assistant message
+    const messageIndex = messages.findIndex(m => m.id === assistantMessageId);
+    console.log('[Memory] Message index:', messageIndex);
+    
+    if (messageIndex < 0) {
+      console.log('[Memory] Message not found, returning');
+      return;
+    }
+    
+    const assistantMessage = messages[messageIndex];
+    
+    // Find the most recent user message BEFORE this assistant message
+    // We need to search backwards to find a user message
+    let userMessage = null;
+    for (let i = messageIndex - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        userMessage = messages[i];
+        break;
+      }
+    }
+    
+    console.log('[Memory] User message:', userMessage?.role, userMessage?.content?.substring(0, 50));
+    console.log('[Memory] Assistant message:', assistantMessage?.role, assistantMessage?.content?.substring(0, 50));
+    
+    // Ensure we have a user-assistant pair
+    if (!userMessage || assistantMessage.role !== 'assistant') {
+      console.log('[Memory] Not a valid user-assistant pair, returning');
+      alert('Could not find a valid user-assistant message pair to save.');
+      return;
+    }
+    
+    setSavingToMemory(assistantMessageId);
+    
+    try {
+      console.log('[Memory] Calling addMemory API...');
+      const result = await addMemory({
+        userMessage: userMessage.content,
+        assistantMessage: assistantMessage.content,
+        sourceApp: assistantMessage.agentsUsed?.length 
+          ? (assistantMessage.agentsUsed.length > 1 ? 'multi-agent' : assistantMessage.agentsUsed[0])
+          : 'chat',
+        metadata: {
+          agentsUsed: assistantMessage.agentsUsed,
+          processingTime: assistantMessage.processingTime,
+          conversationId: currentChatId,
+        }
+      });
+      
+      console.log('[Memory] API result:', result);
+      
+      if (result.success) {
+        setSavedToMemory(prev => new Set([...prev, assistantMessageId]));
+        console.log('[Memory] Successfully saved to memory');
+        alert('Memory saved successfully!');
+      } else {
+        console.error('Failed to save to memory:', result.error);
+        alert('Failed to save to memory: ' + (result.error || 'Unknown error'));
+      }
+    } catch (error: any) {
+      console.error('Error saving to memory:', error);
+      alert(error.message || 'Failed to save to memory. Please try again.');
+    } finally {
+      setSavingToMemory(null);
     }
   };
 
@@ -1299,7 +1813,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                       </div>
                       
                       <div className="mt-2 text-xs text-gray-600 text-right">
-                        {message.timestamp.toLocaleTimeString()}
+                        {(message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)).toLocaleTimeString()}
                       </div>
                     </div>
                   ) : (message as any).isCanceled ? (
@@ -1317,7 +1831,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                         </div>
                       </div>
                       <div className="mt-2 text-xs text-gray-600 text-right">
-                        {message.timestamp.toLocaleTimeString()}
+                        {(message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)).toLocaleTimeString()}
                       </div>
                     </div>
                   ) : (message as any).isConfirmed ? (
@@ -1344,7 +1858,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                         </div>
                       </div>
                       <div className="mt-2 text-xs text-gray-600 text-right">
-                        {message.timestamp.toLocaleTimeString()}
+                        {(message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)).toLocaleTimeString()}
                       </div>
                     </div>
                   ) : (
@@ -1363,6 +1877,19 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                               host={meetingInfo.host}
                               hostEmail={meetingInfo.hostEmail}
                             />
+                          );
+                        }
+                        return null;
+                      })()}
+                      
+                      {(() => {
+                        // Check for flight search results
+                        const flightData = extractFlightInfo(message.content);
+                        if (flightData) {
+                          return (
+                            <div className="mb-4">
+                              <FlightResultsInline data={flightData} />
+                            </div>
                           );
                         }
                         return null;
@@ -1402,9 +1929,35 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                             </span>
                           )}
                         </div>
-                        <span className="text-gray-500">
-                          {message.timestamp.toLocaleTimeString()}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          {/* Add to Memory button */}
+                          {messages.findIndex(m => m.id === message.id) > 0 && (
+                            <button
+                              onClick={() => handleAddToMemory(message.id)}
+                              disabled={savingToMemory === message.id || savedToMemory.has(message.id)}
+                              className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-all duration-200 ${
+                                savedToMemory.has(message.id)
+                                  ? 'bg-emerald-500/10 text-emerald-400 cursor-default'
+                                  : savingToMemory === message.id
+                                  ? 'bg-neutral-800 text-gray-400 cursor-wait'
+                                  : 'bg-neutral-800 hover:bg-neutral-700 text-gray-400 hover:text-gray-300'
+                              }`}
+                              title={savedToMemory.has(message.id) ? 'Saved to memory' : 'Add to long-term memory'}
+                            >
+                              <Brain className="w-3.5 h-3.5" />
+                              <span>
+                                {savedToMemory.has(message.id)
+                                  ? 'Remembered'
+                                  : savingToMemory === message.id
+                                  ? 'Saving...'
+                                  : 'Remember'}
+                              </span>
+                            </button>
+                          )}
+                          <span className="text-gray-500">
+                            {(message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)).toLocaleTimeString()}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}

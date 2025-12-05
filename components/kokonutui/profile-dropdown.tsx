@@ -13,6 +13,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import Gemini from "../icons/gemini";
+import { useSettings } from "@/contexts/SettingsContext";
 
 interface Profile {
     name: string;
@@ -49,6 +50,7 @@ export default function ProfileDropdown({
     ...props
 }: ProfileDropdownProps) {
     const [isOpen, setIsOpen] = React.useState(false);
+    const { openSettings } = useSettings();
     
     // Get user initial (first letter only)
     const getInitial = (name: string) => {
@@ -154,31 +156,49 @@ export default function ProfileDropdown({
                         <div className="space-y-1">
                             {menuItems.map((item) => (
                                 <DropdownMenuItem key={item.label} asChild>
-                                    <Link
-                                        href={item.href}
-                                        className="flex items-center p-3 hover:bg-zinc-800/60 rounded-xl transition-all duration-200 cursor-pointer group hover:shadow-md hover:shadow-black/20 border border-transparent hover:border-zinc-700/50"
-                                    >
-                                        <div className="flex items-center gap-2 flex-1">
-                                            {item.icon}
-                                            <span className="text-sm font-medium text-zinc-100 tracking-tight leading-tight whitespace-nowrap group-hover:text-white transition-colors">
-                                                {item.label}
-                                            </span>
-                                        </div>
-                                        <div className="flex-shrink-0 ml-auto">
-                                            {item.value && (
-                                                <span
-                                                    className={cn(
-                                                        "text-xs font-medium rounded-md py-1 px-2 tracking-tight",
-                                                        item.label === "Model"
-                                                            ? "text-blue-400 bg-blue-500/10 border border-blue-500/20"
-                                                            : "text-purple-400 bg-purple-500/10 border border-purple-500/20"
-                                                    )}
-                                                >
-                                                    {item.value}
+                                    {item.label === "Settings" ? (
+                                        <button
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                openSettings('general');
+                                                setIsOpen(false);
+                                            }}
+                                            className="w-full flex items-center p-3 hover:bg-zinc-800/60 rounded-xl transition-all duration-200 cursor-pointer group hover:shadow-md hover:shadow-black/20 border border-transparent hover:border-zinc-700/50"
+                                        >
+                                            <div className="flex items-center gap-2 flex-1">
+                                                {item.icon}
+                                                <span className="text-sm font-medium text-zinc-100 tracking-tight leading-tight whitespace-nowrap group-hover:text-white transition-colors">
+                                                    {item.label}
                                                 </span>
-                                            )}
-                                        </div>
-                                    </Link>
+                                            </div>
+                                        </button>
+                                    ) : (
+                                        <Link
+                                            href={item.href}
+                                            className="flex items-center p-3 hover:bg-zinc-800/60 rounded-xl transition-all duration-200 cursor-pointer group hover:shadow-md hover:shadow-black/20 border border-transparent hover:border-zinc-700/50"
+                                        >
+                                            <div className="flex items-center gap-2 flex-1">
+                                                {item.icon}
+                                                <span className="text-sm font-medium text-zinc-100 tracking-tight leading-tight whitespace-nowrap group-hover:text-white transition-colors">
+                                                    {item.label}
+                                                </span>
+                                            </div>
+                                            <div className="flex-shrink-0 ml-auto">
+                                                {item.value && (
+                                                    <span
+                                                        className={cn(
+                                                            "text-xs font-medium rounded-md py-1 px-2 tracking-tight",
+                                                            item.label === "Model"
+                                                                ? "text-blue-400 bg-blue-500/10 border border-blue-500/20"
+                                                                : "text-purple-400 bg-purple-500/10 border border-purple-500/20"
+                                                        )}
+                                                    >
+                                                        {item.value}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </Link>
+                                    )}
                                 </DropdownMenuItem>
                             ))}
                         </div>

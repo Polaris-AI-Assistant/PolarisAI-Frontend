@@ -7,9 +7,15 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
+export interface UserLocation {
+  lat: number;
+  lng: number;
+}
+
 export interface AgentQuery {
   query: string;
   conversationHistory?: ConversationMessage[];
+  userLocation?: UserLocation;
 }
 
 export interface ConversationMessage {
@@ -94,6 +100,12 @@ export interface ConfirmationRequest {
   params: Record<string, any>;
   previewContent: string;
   originalQuery?: string;
+  chainInfo?: {
+    chainId: string;
+    currentStep: number;
+    totalSteps: number;
+    previousResults?: any[];
+  };
 }
 
 /**
@@ -137,7 +149,8 @@ export async function processQueryStreaming(
   query: string,
   conversationHistory: ConversationMessage[] | undefined,
   onChunk: (chunk: StreamChunk) => void,
-  conversationId?: string  // Optional: for artifact memory
+  conversationId?: string,  // Optional: for artifact memory
+  userLocation?: UserLocation  // Optional: for Maps queries requiring location
 ): Promise<void> {
   // Import auth functions dynamically to avoid circular dependencies
   const { getAuthToken, refreshAuthToken } = await import('./auth');
@@ -160,6 +173,7 @@ export async function processQueryStreaming(
         query,
         conversationHistory,
         conversationId,  // Pass conversationId for artifact memory
+        userLocation,  // Pass userLocation for Maps queries
       }),
     });
   };
@@ -247,6 +261,13 @@ export interface StreamChunk {
   params?: Record<string, any>;
   previewContent?: string;
   originalQuery?: string;
+  // Chain info for multi-action requests
+  chainInfo?: {
+    chainId: string;
+    currentStep: number;
+    totalSteps: number;
+    previousResults?: any[];
+  };
 }
 
 /**
@@ -355,8 +376,11 @@ export function formatAgentName(agentKey: string): string {
     docs: 'Docs',
     forms: 'Forms',
     github: 'GitHub',
+    gmail: 'Gmail',
     meet: 'Meet',
     sheets: 'Sheets',
+    flights: 'Flights',
+    maps: 'Maps',
   };
   return names[agentKey] || agentKey;
 }
@@ -370,8 +394,11 @@ export function getAgentIcon(agentKey: string): string {
     docs: '📄',
     forms: '📝',
     github: '⚡',
+    gmail: '📧',
     meet: '📹',
     sheets: '📊',
+    flights: '✈️',
+    maps: '🗺️',
   };
   return icons[agentKey] || '🤖';
 }
@@ -385,8 +412,11 @@ export function getAgentColor(agentKey: string): string {
     docs: 'indigo',
     forms: 'purple',
     github: 'gray',
+    gmail: 'red',
     meet: 'green',
     sheets: 'emerald',
+    flights: 'sky',
+    maps: 'orange',
   };
   return colors[agentKey] || 'gray';
 }
