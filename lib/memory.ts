@@ -14,6 +14,7 @@ export interface Memory {
   id: string;
   user_id: string;
   content: string;
+  summary?: string; // Short human-readable summary
   memory_type: MemoryType;
   source_app: string | null;
   metadata: Record<string, any> | null;

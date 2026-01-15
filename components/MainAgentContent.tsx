@@ -309,6 +309,7 @@ const extractFlightInfo = (content: string): FlightData | null => {
     arrivalTime: string;
     duration: string;
     stops: number;
+    airplane?: string;
   }> = [];
 
   // Extract using structured patterns matching AI response format:
@@ -348,14 +349,14 @@ const extractFlightInfo = (content: string): FlightData | null => {
   const airlines: string[] = [];
   
   // Pattern 1: Numbered list with bold airline name "1. **IndiGo**" or "1. IndiGo"
-  const numberedAirlineMatches = content.matchAll(/\d+\.\s*\*?\*?(IndiGo|Air India|SpiceJet|Vistara|Akasa Air|Go First|AirAsia|Emirates|Qatar Airways|Singapore Airlines|Lufthansa|British Airways|Etihad)\*?\*?/gi);
+  const numberedAirlineMatches = content.matchAll(/\d+\.\s*\*?\*?(Air India Express|Air India|IndiGo|SpiceJet|Vistara|Akasa Air|Go First|AirAsia India|AirAsia|Alliance Air|Emirates|Qatar Airways|Singapore Airlines|Lufthansa|British Airways|Etihad)\*?\*?/gi);
   for (const m of numberedAirlineMatches) {
     airlines.push(m[1].trim());
   }
   
   // Pattern 2: "Airline: IndiGo" or "**Airline:** IndiGo"
   if (airlines.length === 0) {
-    const airlineMatches = content.matchAll(/(?:\*\*)?(?:airline|carrier)(?:\*\*)?[:\s*]+\*?\*?(IndiGo|Air India|SpiceJet|Vistara|Akasa Air|Go First|AirAsia|Emirates|Qatar Airways|Singapore Airlines|Lufthansa|British Airways|Etihad)\*?\*?/gi);
+    const airlineMatches = content.matchAll(/(?:\*\*)?(?:airline|carrier)(?:\*\*)?[:\s*]+\*?\*?(Air India Express|Air India|IndiGo|SpiceJet|Vistara|Akasa Air|Go First|AirAsia India|AirAsia|Alliance Air|Emirates|Qatar Airways|Singapore Airlines|Lufthansa|British Airways|Etihad)\*?\*?/gi);
     for (const m of airlineMatches) {
       airlines.push(m[1].trim());
     }
@@ -372,7 +373,7 @@ const extractFlightInfo = (content: string): FlightData | null => {
   
   // Pattern 4: Match bold standalone airline names "**IndiGo**" followed by flight details
   if (airlines.length === 0) {
-    const boldAirlineMatches = content.matchAll(/\*\*(IndiGo|Air India|SpiceJet|Vistara|Akasa Air|Go First|AirAsia)\*\*/gi);
+    const boldAirlineMatches = content.matchAll(/\*\*(Air India Express|Air India|IndiGo|SpiceJet|Vistara|Akasa Air|Go First|AirAsia India|AirAsia|Alliance Air)\*\*/gi);
     for (const m of boldAirlineMatches) {
       airlines.push(m[1].trim());
     }
@@ -420,12 +421,28 @@ const extractFlightInfo = (content: string): FlightData | null => {
     arrivals.push({ time: m[1] });
   }
 
-  // Find stops - match "Stops: Direct flight" or "Direct" or "1 stop"
+  // Find stops - match "Stops: Direct flight" or "Direct" or "1 stop" or "Layover:"
   const stopsInfo: number[] = [];
-  const stopsMatches = content.matchAll(/(?:\*\*)?(?:stops?)(?:\*\*)?[:\s]+\*?\*?(direct|non-?stop|\d+\s*stops?)/gi);
+  const stopsMatches = content.matchAll(/(?:\*\*)?(?:stops?)(?:\*\*)?[:\s]+\*?\*?(direct|non-?stop|\d+\s*stops?)|(?:\*\*)?layover(?:\*\*)?[:\s]/gi);
   for (const m of stopsMatches) {
-    const stopText = m[1].toLowerCase();
-    stopsInfo.push(stopText.includes('direct') || stopText.includes('non') ? 0 : parseInt(stopText) || 1);
+    const stopText = m[1] || m[0];
+    if (stopText.toLowerCase().includes('layover')) {
+      stopsInfo.push(1); // If layover is mentioned, it's at least 1 stop
+    } else {
+      const text = stopText.toLowerCase();
+      stopsInfo.push(text.includes('direct') || text.includes('non') ? 0 : parseInt(stopText) || 1);
+    }
+  }
+
+  // Find airplane models - match "Aircraft: Boeing 737" or "Airplane: Airbus A320" or "Aircraft Model: ATR 72"
+  const airplanes: string[] = [];
+  const airplaneMatches = content.matchAll(/(?:\*\*)?(?:aircraft|airplane|plane|aircraft\s*model)(?:\*\*)?[:\s]+\*?\*?([A-Za-z0-9\s-]+?)(?:\*\*)?(?:\n|\.|,|$)/gi);
+  for (const m of airplaneMatches) {
+    const model = m[1].trim();
+    // Filter out generic terms
+    if (model && !model.toLowerCase().includes('model') && model.length > 2) {
+      airplanes.push(model);
+    }
   }
 
   // Build flight objects from extracted data
@@ -449,13 +466,14 @@ const extractFlightInfo = (content: string): FlightData | null => {
       departureTime: departures[i]?.time || '',
       arrivalTime: arrivals[i]?.time || '',
       duration: durations[i] || '',
-      stops: stopsInfo[i] ?? 0
+      stops: stopsInfo[i] ?? 0,
+      airplane: airplanes[i] || ''
     });
   }
 
   // Fallback: Try inline patterns like "IndiGo 6E284 - ₹6,048"
   if (flights.length === 0) {
-    const inlineMatches = content.matchAll(/\b(IndiGo|Air India|SpiceJet|Vistara|Akasa|GoAir|Go First)\b\s*(?:flight\s*)?([A-Z0-9]{2}\s*\d{2,4})?\s*[-–]?\s*₹\s?([\d,]{3,})/gi);
+    const inlineMatches = content.matchAll(/\b(Air India Express|Air India|IndiGo|SpiceJet|Vistara|Akasa Air|Akasa|GoAir|Go First|AirAsia India|AirAsia|Alliance Air)\b\s*(?:flight\s*)?([A-Z0-9]{2}\s*\d{2,4})?\s*[-–]?\s*₹\s?([\d,]{3,})/gi);
     for (const m of inlineMatches) {
       flights.push({
         airline: m[1].trim(),
@@ -480,10 +498,8 @@ const extractFlightInfo = (content: string): FlightData | null => {
   const destination = routeMatch ? routeMatch[2].trim() : 'Destination';
 
   // Map to the nested structure expected by FlightResultsCard
-  const mapToFlightStructure = (f: typeof validFlights[0]) => ({
-    price: f.price,
-    total_duration: f.duration ? parseDurationToMinutes(f.duration) : 120,
-    flights: [{
+  const mapToFlightStructure = (f: typeof validFlights[0]) => {
+    const baseFlightLeg = {
       airline: f.airline,
       flight_number: f.flightNumber,
       departure_airport: {
@@ -497,10 +513,35 @@ const extractFlightInfo = (content: string): FlightData | null => {
         time: f.arrivalTime
       },
       duration: f.duration ? parseDurationToMinutes(f.duration) : 120,
-      airplane: 'Aircraft'
-    }],
-    layovers: f.stops > 0 ? Array(f.stops).fill({ name: 'Layover', duration: 60 }) : []
-  });
+      airplane: f.airplane || ''
+    };
+
+    // For connecting flights (stops > 0), create multiple flight legs
+    if (f.stops > 0) {
+      const flightLegs = [baseFlightLeg];
+      // Add additional legs for each stop
+      for (let i = 1; i <= f.stops; i++) {
+        flightLegs.push({
+          ...baseFlightLeg,
+          flight_number: f.flightNumber
+        });
+      }
+      return {
+        price: f.price,
+        total_duration: f.duration ? parseDurationToMinutes(f.duration) : 120,
+        flights: flightLegs,
+        layovers: Array(f.stops).fill({ name: 'Layover', duration: 60 })
+      };
+    }
+
+    // Direct flight
+    return {
+      price: f.price,
+      total_duration: f.duration ? parseDurationToMinutes(f.duration) : 120,
+      flights: [baseFlightLeg],
+      layovers: []
+    };
+  };
 
   return {
     from: origin,
@@ -848,6 +889,149 @@ const PreviewContentRenderer = ({ content, actionType }: { content: string; acti
   );
 };
 
+// Collapsible Confirmed Action Component
+const CollapsibleConfirmedAction = ({ 
+  content, 
+  actionType, 
+  agentName, 
+  description 
+}: { 
+  content: string; 
+  actionType?: string; 
+  agentName?: string; 
+  description?: string; 
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Extract recipient email from content for email actions
+  const getRecipientInfo = () => {
+    if (actionType === 'send_email') {
+      const toMatch = content.match(/\*\*To\*\*:\s*([^\n]+)/);
+      if (toMatch) {
+        return toMatch[1].trim();
+      }
+    }
+    return null;
+  };
+
+  const recipientEmail = getRecipientInfo();
+  
+  // Get action icon based on type
+  const getActionIcon = () => {
+    if (actionType === 'send_email') {
+      return <Mail className="w-5 h-5 text-red-400" />;
+    } else if (actionType === 'create_event') {
+      return <Calendar className="w-5 h-5 text-blue-400" />;
+    } else if (actionType === 'create_document') {
+      return <FileText className="w-5 h-5 text-blue-400" />;
+    } else if (actionType === 'create_form') {
+      return <ClipboardList className="w-5 h-5 text-purple-400" />;
+    }
+    return <Check className="w-4 h-4 text-emerald-400" />;
+  };
+  
+  return (
+    <div className="max-w-3xl w-full">
+      {/* Collapsed Bar - Gmail-style design */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] px-4 py-2.5 hover:bg-[#1f1f1f] transition-all duration-200"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Icon based on action type */}
+            <div className="flex-shrink-0">
+              {getActionIcon()}
+            </div>
+            
+            {/* Main info */}
+            <div className="text-left flex-1 min-w-0">
+              {actionType === 'send_email' && recipientEmail ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-400">To:</span>
+                  <span className="text-sm font-medium text-emerald-400 truncate">{recipientEmail}</span>
+                </div>
+              ) : (
+                <span className="text-sm font-medium text-white truncate block">{description || 'Action Confirmed'}</span>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Action badge */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20">
+              <Check className="w-3 h-3 text-emerald-400" />
+              <span className="text-xs font-medium text-emerald-400">
+                {actionType === 'send_email' ? 'sendEmail' : 
+                 actionType === 'create_event' ? 'createEvent' :
+                 actionType === 'create_document' ? 'createDoc' :
+                 actionType === 'create_form' ? 'createForm' : 'confirmed'}
+              </span>
+            </div>
+            
+            {/* Dropdown arrow */}
+            <div className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-gray-400">
+                <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </button>
+
+      {/* Expanded Content - Full preview panel */}
+      {isExpanded && (
+        <div className="mt-3 rounded-2xl bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden shadow-xl">
+          {/* Action Type Header */}
+          <div className="px-5 py-3.5 flex items-center justify-between border-b border-[#2a2a2a]">
+            <div className="flex items-center gap-2.5">
+              {actionType === 'send_email' ? (
+                <div className="w-5 h-5 bg-red-500/20 rounded flex items-center justify-center">
+                  <Mail className="w-3 h-3 text-red-400" />
+                </div>
+              ) : (
+                <span className="text-lg">
+                  {getActionTypeIcon(actionType || 'unknown')}
+                </span>
+              )}
+              <span className="text-sm font-medium text-white">
+                {description || 'Action Preview'}
+              </span>
+            </div>
+            <span className={`text-xs font-medium px-2.5 py-1 rounded-md ${
+              agentName === 'gmail' 
+                ? 'text-emerald-400 bg-emerald-400/10' 
+                : agentName === 'calendar'
+                ? 'text-blue-400 bg-blue-400/10'
+                : 'text-gray-400 bg-gray-400/10'
+            }`}>
+              {formatAgentName(agentName || 'agent')}
+            </span>
+          </div>
+          
+          {/* Preview Content */}
+          <div className="p-5">
+            <div 
+              className="space-y-3"
+              style={{ 
+                fontFamily: 'Inter, "Inter Fallback"',
+                fontSize: '14px',
+                lineHeight: '22px',
+              }}
+            >
+              {content ? (
+                <PreviewContentRenderer content={content} actionType={actionType} />
+              ) : (
+                <span className="text-gray-500">No preview content available</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface MainAgentContentProps {
   chatId?: string | null;
   onChatIdChange?: (chatId: string) => void;
@@ -1155,6 +1339,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             // Handle confirmation request - pause streaming and show confirmation UI
             console.log('[Confirmation] Received confirmation request:', chunk);
             console.log('[Confirmation] Preview content:', chunk.previewContent);
+            console.log('[Confirmation] Is modification:', chunk.isModification);
             console.log('[Confirmation] Looking for message ID:', assistantMessageId);
             
             // Build the preview content with step indicator if part of a chain
@@ -1164,28 +1349,78 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
               confirmationPreview = stepIndicator + confirmationPreview;
             }
             
-            // Update the assistant message to show the confirmation preview FIRST
-            setMessages((prev) => {
-              console.log('[Confirmation] Current messages:', prev.map(m => ({ id: m.id, content: m.content?.substring(0, 50) })));
-              const updated = prev.map((m) =>
-                m.id === assistantMessageId
-                  ? { 
-                      ...m, 
-                      content: confirmationPreview,
-                      isPendingConfirmation: true,
-                      confirmationData: {
-                        requestId: chunk.requestId!,
-                        toolName: chunk.toolName!,
-                        agentName: chunk.agentName!,
-                        actionType: chunk.actionType!,
-                        description: chunk.description!,
+            // If this is a modification, update the EXISTING pending confirmation message
+            // Otherwise, create/update the assistant message as before
+            if (chunk.isModification && pendingConfirmation) {
+              console.log('[Confirmation] 🔄 Updating with modification - creating new preview after user message');
+              console.log('[Confirmation] 🔄 Updated preview:', confirmationPreview.substring(0, 100));
+              
+              setMessages((prev) => {
+                // Remove the empty assistant message we just created AND the old pending confirmation
+                const filtered = prev.filter(m => {
+                  // Remove empty assistant message
+                  if (m.id === assistantMessageId && m.content === '') return false;
+                  // Remove old pending confirmation message
+                  if ((m as any).isPendingConfirmation) return false;
+                  return true;
+                });
+                
+                // Add the new confirmation message AFTER the user's modification message
+                const newConfirmMessage = {
+                  id: `assistant-modified-${Date.now()}`,
+                  role: 'assistant' as const,
+                  content: confirmationPreview,
+                  timestamp: new Date(),
+                  isPendingConfirmation: true,
+                  confirmationData: {
+                    requestId: chunk.requestId!,
+                    toolName: chunk.toolName!,
+                    agentName: chunk.agentName!,
+                    actionType: chunk.actionType!,
+                    description: chunk.description!,
+                  }
+                };
+                
+                console.log('[Confirmation] 🔄 Removed old preview, adding new one. Messages: before=' + prev.length + ', after=' + (filtered.length + 1));
+                return [...filtered, newConfirmMessage];
+              });
+              
+              // Also update the pending confirmation state
+              setPendingConfirmation({
+                requestId: chunk.requestId!,
+                toolName: chunk.toolName!,
+                agentName: chunk.agentName!,
+                actionType: chunk.actionType!,
+                description: chunk.description!,
+                params: chunk.params || {},
+                previewContent: chunk.previewContent!,
+                originalQuery: chunk.originalQuery,
+                chainInfo: chunk.chainInfo,
+              });
+            } else {
+              // Original behavior - update the assistant message
+              setMessages((prev) => {
+                console.log('[Confirmation] Current messages:', prev.map(m => ({ id: m.id, content: m.content?.substring(0, 50) })));
+                const updated = prev.map((m) =>
+                  m.id === assistantMessageId
+                    ? { 
+                        ...m, 
+                        content: confirmationPreview,
+                        isPendingConfirmation: true,
+                        confirmationData: {
+                          requestId: chunk.requestId!,
+                          toolName: chunk.toolName!,
+                          agentName: chunk.agentName!,
+                          actionType: chunk.actionType!,
+                          description: chunk.description!,
+                        }
                       }
-                    }
-                  : m
-              );
-              console.log('[Confirmation] Updated messages:', updated.map(m => ({ id: m.id, content: m.content?.substring(0, 50), isPending: (m as any).isPendingConfirmation })));
-              return updated;
-            });
+                    : m
+                );
+                console.log('[Confirmation] Updated messages:', updated.map(m => ({ id: m.id, content: m.content?.substring(0, 50), isPending: (m as any).isPendingConfirmation })));
+                return updated;
+              });
+            }
             
             // Then update other states
             setIsThinking(false);
@@ -1316,7 +1551,18 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
           ? { ...m, isPendingConfirmation: false, isConfirmed: true }
           : m
       );
-      return [...updated, responseMessage];
+      const withResponse = [...updated, responseMessage];
+      
+      // Save to database immediately to persist the confirmed state
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      saveTimeoutRef.current = setTimeout(() => {
+        saveMessagesToDB(withResponse);
+        saveTimeoutRef.current = null;
+      }, 100);
+      
+      return withResponse;
     });
 
     // Track if a new confirmation is received during streaming (for action chains)
@@ -1356,34 +1602,63 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
           case 'confirmation_request':
             // Handle next confirmation in chain - another action needs confirmation
             console.log('[Confirmation] Received next confirmation in chain:', chunk);
+            console.log('[Confirmation] Is modification:', chunk.isModification);
             receivedNewConfirmation = true;
             
-            // First, finalize the current response message
-            const currentContent = streamingContentRef.current;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === responseMessageId
-                  ? { ...m, content: currentContent }
-                  : m
-              )
-            );
-            
-            // Create a new message for the next confirmation preview
-            const nextConfirmMessageId = `assistant-${Date.now()}-nextconfirm`;
-            const nextConfirmPreview = chunk.previewContent || 'Next action requires confirmation';
+            // Prepare preview content
+            const nextConfirmPreview = chunk.previewContent || 'Action requires confirmation';
             const chainInfo = chunk.chainInfo;
             const stepIndicator = chainInfo ? `\n\n📋 **Step ${chainInfo.currentStep} of ${chainInfo.totalSteps}**` : '';
             
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: nextConfirmMessageId,
-                role: 'assistant' as const,
-                content: stepIndicator + '\n\n' + nextConfirmPreview,
-                timestamp: new Date(),
-                isPendingConfirmation: true,
-                confirmationData: {
-                  requestId: chunk.requestId!,
+            // If this is a modification, update the existing pending confirmation
+            if (chunk.isModification && pendingConfirmation) {
+              console.log('[Confirmation] 🔄 [CHAIN] Updating existing confirmation with modified parameters');
+              console.log('[Confirmation] 🔄 [CHAIN] Updated preview length:', nextConfirmPreview.length);
+              
+              setMessages((prev) => {
+                const updated = prev.map((m) =>
+                  (m as any).isPendingConfirmation
+                    ? {
+                        ...m,
+                        content: stepIndicator + '\n\n' + nextConfirmPreview,
+                        confirmationData: {
+                          requestId: chunk.requestId!,
+                          toolName: chunk.toolName!,
+                          agentName: chunk.agentName!,
+                          actionType: chunk.actionType!,
+                          description: chunk.description!,
+                        }
+                      }
+                    : m
+                );
+                console.log('[Confirmation] 🔄 [CHAIN] Updated messages count:', updated.filter((m: any) => m.isPendingConfirmation).length);
+                return updated;
+              });
+            } else {
+              // Original behavior - finalize current message and create new confirmation message
+              // First, finalize the current response message
+              const currentContent = streamingContentRef.current;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === responseMessageId
+                    ? { ...m, content: currentContent }
+                    : m
+                )
+              );
+              
+              // Create a new message for the next confirmation preview
+              const nextConfirmMessageId = `assistant-${Date.now()}-nextconfirm`;
+              
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: nextConfirmMessageId,
+                  role: 'assistant' as const,
+                  content: stepIndicator + '\n\n' + nextConfirmPreview,
+                  timestamp: new Date(),
+                  isPendingConfirmation: true,
+                  confirmationData: {
+                    requestId: chunk.requestId!,
                   toolName: chunk.toolName!,
                   agentName: chunk.agentName!,
                   actionType: chunk.actionType!,
@@ -1391,8 +1666,9 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 }
               } as any
             ]);
+            }
             
-            // Set the new pending confirmation
+            // Set the new/updated pending confirmation
             setPendingConfirmation({
               requestId: chunk.requestId!,
               toolName: chunk.toolName!,
@@ -1400,7 +1676,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
               actionType: chunk.actionType!,
               description: chunk.description!,
               params: chunk.params || {},
-              previewContent: nextConfirmPreview,
+              previewContent: chunk.previewContent || 'Action requires confirmation',
               originalQuery: chunk.originalQuery,
               chainInfo: chunk.chainInfo,
             });
@@ -1835,32 +2111,13 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                       </div>
                     </div>
                   ) : (message as any).isConfirmed ? (
-                    // Confirmed action message - Success style
-                    <div className="max-w-3xl w-full">
-                      <div className="rounded-xl bg-[#1a1a1a] border border-emerald-500/20 px-5 py-4">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                            <Check className="w-4 h-4 text-emerald-400" />
-                          </div>
-                          <div>
-                            <span className="text-sm font-medium text-emerald-400">Action Confirmed</span>
-                            <p className="text-xs text-gray-500 mt-0.5">Executing your request...</p>
-                          </div>
-                        </div>
-                        <div 
-                          className="pl-11 text-sm text-gray-400"
-                          style={{ 
-                            fontFamily: 'Inter, "Inter Fallback"',
-                            lineHeight: '22px',
-                          }}
-                        >
-                          {formatMessageContent(message.content)}
-                        </div>
-                      </div>
-                      <div className="mt-2 text-xs text-gray-600 text-right">
-                        {(message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)).toLocaleTimeString()}
-                      </div>
-                    </div>
+                    // Confirmed action message - Collapsible dropdown style
+                    <CollapsibleConfirmedAction 
+                      content={message.content}
+                      actionType={(message as any).confirmationData?.actionType}
+                      agentName={(message as any).confirmationData?.agentName}
+                      description={(message as any).confirmationData?.description}
+                    />
                   ) : (
                     <div className="max-w-3xl">
                       {(() => {

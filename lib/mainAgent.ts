@@ -174,6 +174,7 @@ export async function processQueryStreaming(
         conversationHistory,
         conversationId,  // Pass conversationId for artifact memory
         userLocation,  // Pass userLocation for Maps queries
+        chatId: conversationId,  // Pass chatId (same as conversationId) for database chat history retrieval
       }),
     });
   };
@@ -261,6 +262,7 @@ export interface StreamChunk {
   params?: Record<string, any>;
   previewContent?: string;
   originalQuery?: string;
+  isModification?: boolean;
   // Chain info for multi-action requests
   chainInfo?: {
     chainId: string;

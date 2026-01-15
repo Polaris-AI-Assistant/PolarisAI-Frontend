@@ -57,14 +57,17 @@ interface FlightResultsCardProps {
   onSelectFlight?: (flight: Flight) => void;
 }
 
-// Airline logo mapping for common Indian airlines
+// Airline logo mapping for common Indian airlines - using local public folder logos
 const AIRLINE_LOGOS: Record<string, string> = {
-  'IndiGo': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/IndiGo_Airlines_logo.svg/200px-IndiGo_Airlines_logo.svg.png',
-  'Air India': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/Air_India_Logo.svg/200px-Air_India_Logo.svg.png',
-  'SpiceJet': 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/SpiceJet_logo.svg/200px-SpiceJet_logo.svg.png',
+  'IndiGo': '/INDIGO.NS-77f45585.png',
+  'Air India': '/airIndia.png',
+  'Air India Express': '/airIndia.png',
+  'SpiceJet': '/spicejet-logo_brandlogos.net_0ywcb.png',
   'Vistara': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Vistara_Logo.svg/200px-Vistara_Logo.svg.png',
   'Akasa Air': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Akasa_Air_logo.svg/200px-Akasa_Air_logo.svg.png',
   'Go First': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/Go_First_logo.svg/200px-Go_First_logo.svg.png',
+  'AirAsia India': 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/AirAsia_New_Logo.svg/200px-AirAsia_New_Logo.svg.png',
+  'Alliance Air': '/airIndia.png',
 };
 
 // Helper function to format duration
@@ -103,10 +106,12 @@ function FlightRow({
   const departureTime = firstLeg?.departure_airport?.time || '';
   const arrivalTime = lastLeg?.arrival_airport?.time || '';
   const duration = flight.total_duration;
-  const airplane = firstLeg?.airplane || 'Aircraft';
+  const airplane = firstLeg?.airplane || '';
   const stops = (flight.flights?.length || 1) - 1;
   const price = flight.price;
-  const route = `${firstLeg?.departure_airport?.id || '?'} - ${lastLeg?.arrival_airport?.id || '?'}`;
+  const departureId = firstLeg?.departure_airport?.id || '?';
+  const arrivalId = lastLeg?.arrival_airport?.id || '?';
+  const route = `${departureId} - ${arrivalId}`;
 
   // Get all airlines for connecting flights
   const allAirlines = flight.flights?.map(f => f.airline).filter((v, i, a) => a.indexOf(v) === i).join(' + ') || airline;
@@ -115,51 +120,66 @@ function FlightRow({
   const logoUrl = AIRLINE_LOGOS[airline];
 
   return (
-    <div className="flex items-center justify-between py-4 px-4 hover:bg-white/[0.02] transition-colors border-b border-white/[0.06] last:border-b-0">
-      {/* Airline Logo and Info */}
-      <div className="flex items-center gap-4 min-w-[180px]">
-        <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${getAirlineColor(airline)} flex items-center justify-center shadow-lg overflow-hidden`}>
+    <div className="flex items-stretch justify-between py-4 px-4 hover:bg-white/[0.02] transition-colors border-b border-white/[0.06] last:border-b-0">
+      {/* Left Section: Logo, Airline Name, and Times */}
+      <div className="flex items-stretch gap-4 min-w-[220px] flex-grow">
+        {/* Logo */}
+        <div className="w-12 h-12 flex items-center justify-center overflow-hidden flex-shrink-0">
           {logoUrl ? (
-            <img src={logoUrl} alt={airline} className="w-8 h-8 object-contain" onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-            }} />
+            <img 
+              src={logoUrl} 
+              alt={airline} 
+              className="w-10 h-10 object-contain" 
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }} 
+            />
           ) : null}
-          <Plane className={`w-5 h-5 text-white ${logoUrl ? 'hidden' : ''}`} />
+          <Plane className={`w-6 h-6 text-gray-400 ${logoUrl ? 'hidden' : ''}`} />
         </div>
-        <div>
-          <div className="text-white font-medium text-sm">{airline} {flightNumber}</div>
-          <div className="text-gray-500 text-xs">{allAirlines !== airline ? allAirlines : ''}</div>
+
+        {/* Info Stack: Times on top, Airline/Connections below */}
+        <div className="flex flex-col gap-1 flex-grow">
+          {/* Times Row */}
+          <div className="flex items-center gap-2">
+            <span className="text-white font-bold text-base">{departureTime || '--:--'}</span>
+            <span className="text-gray-400 text-xs">→</span>
+            <span className="text-white font-bold text-base">{arrivalTime || '--:--'}</span>
+          </div>
+          
+          {/* Airline Name Row */}
+          <div className="flex flex-col">
+            <span className="text-gray-300 text-sm font-medium">
+              {isConnecting ? allAirlines : `${airline}${flightNumber ? ' ' + flightNumber : ''}`}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Times */}
-      <div className="flex items-center gap-2 min-w-[140px]">
-        <span className="text-white font-semibold">{departureTime || '--:--'}</span>
-        <span className="text-gray-500">→</span>
-        <span className="text-white font-semibold">{arrivalTime || '--:--'}</span>
+      {/* Middle Section: Duration and Route */}
+      <div className="flex flex-col gap-1 items-center min-w-[120px] px-4">
+        <div className="text-white font-semibold text-sm">{formatDuration(duration)}</div>
+        <div className="text-gray-400 text-xs">{route}</div>
       </div>
 
-      {/* Duration */}
-      <div className="min-w-[100px]">
-        <div className="text-gray-400 text-sm">{formatDuration(duration)}</div>
-        <div className="text-gray-600 text-xs">{route}</div>
+      {/* Right-Middle Section: Airplane Model */}
+      <div className="flex flex-col gap-1 items-center min-w-[140px] px-4">
+        {airplane ? (
+          <>
+            <div className="text-gray-400 text-sm font-medium">{airplane}</div>
+            <div className="text-gray-600 text-xs">Aircraft</div>
+          </>
+        ) : (
+          <div className="text-gray-500 text-xs">Aircraft</div>
+        )}
       </div>
 
-      {/* Aircraft */}
-      <div className="min-w-[100px]">
-        <div className="text-gray-400 text-sm">{airplane}</div>
-        <div className="text-gray-600 text-xs">Aircraft</div>
-      </div>
-
-      {/* Price */}
-      <div className="text-right min-w-[90px]">
+      {/* Far Right Section: Price and Stops Badge */}
+      <div className="flex flex-col justify-between items-end gap-2 min-w-[100px]">
         <div className="text-white font-bold text-lg">₹{price?.toLocaleString('en-IN') || 'N/A'}</div>
-      </div>
-
-      {/* Stops Badge */}
-      <div className="min-w-[70px] text-right">
-        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+        
+        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
           stops === 0 
             ? 'bg-green-500/20 text-green-400' 
             : 'bg-yellow-500/20 text-yellow-400'
@@ -316,7 +336,15 @@ export function FlightResultsCard({
         <div className="px-5 py-3 bg-white/[0.02] border-t border-white/[0.08]">
           <div className="text-gray-500 text-xs">
             💡 <span className="text-gray-400">Tips:</span>
-            <span className="ml-2">• All flights listed are direct, providing a convenient travel experience.</span>
+            {directFlights.length > 0 && connectingFlights.length === 0 && (
+              <span className="ml-2">• All flights listed are direct, providing a convenient travel experience.</span>
+            )}
+            {connectingFlights.length > 0 && directFlights.length === 0 && (
+              <span className="ml-2">• Connecting flights may take longer but can offer better prices.</span>
+            )}
+            {directFlights.length > 0 && connectingFlights.length > 0 && (
+              <span className="ml-2">• Direct flights save time, while connecting flights may offer better prices.</span>
+            )}
             <span className="ml-2">• Prices can fluctuate, so it's advisable to book soon to secure these rates.</span>
           </div>
         </div>

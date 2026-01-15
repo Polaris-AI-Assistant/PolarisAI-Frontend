@@ -45,21 +45,18 @@ export default function SettingsModal() {
         className="max-w-4xl w-full h-[85vh] max-h-[800px] bg-[#1f1f1f] border border-zinc-800 p-0 gap-0 overflow-hidden rounded-2xl"
         onPointerDownOutside={closeSettings}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-800/50">
-          <h1 className="text-xl font-semibold text-white">Settings</h1>
-          <button
-            onClick={closeSettings}
-            className="rounded-lg p-2 hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Close settings"
-          >
-            <X className="h-5 w-5 text-zinc-400 hover:text-white" />
-          </button>
-        </div>
+        {/* Close button - positioned absolutely */}
+        <button
+          onClick={closeSettings}
+          className="absolute top-4 right-4 z-10 rounded-lg p-2 hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label="Close settings"
+        >
+          <X className="h-5 w-5 text-zinc-400 hover:text-white" />
+        </button>
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden h-full">
           {/* Tabs Sidebar */}
-          <div className="w-64 border-r border-zinc-800/50 bg-[#171717] px-3 py-4 flex-shrink-0 overflow-y-auto">
+          <div className="w-64 border-r border-zinc-800/50 bg-[#171717] px-3 py-4 flex-shrink-0 overflow-y-auto custom-scrollbar">
             <nav className="space-y-0.5">
               {tabs.map((tab) => (
                 <button
@@ -80,7 +77,7 @@ export default function SettingsModal() {
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 overflow-y-auto bg-[#1f1f1f]">
+          <div className="flex-1 overflow-y-auto bg-[#1f1f1f] custom-scrollbar">
             <div className="max-w-3xl mx-auto px-8 py-6">
               {activeTab === 'general' && <GeneralTab />}
               {activeTab === 'memory' && <MemorySettingsTab />}
