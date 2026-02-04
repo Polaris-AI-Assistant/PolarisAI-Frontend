@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { getStoredUser, signOut, User, isAuthenticated } from '../../lib/auth'
 import { connectGmail, checkGmailStatus, GmailConnectionStatus, fetchAndEmbedGmailMessages, getGmailStats, disconnectGmail } from '../../lib/gmail'
 import { connectGitHub, checkGitHubStatus, GitHubConnectionStatus, getGitHubStats, disconnectGitHub } from '../../lib/github'
-import { checkFormsStatus, FormsConnectionStatus, disconnectForms } from '../../lib/forms'
-import { checkSheetsStatus, SheetsConnectionStatus, disconnectSheets } from '../../lib/sheets'
-import { checkDocsStatus, DocsConnectionStatus, disconnectDocs } from '../../lib/docs'
+import { connectForms, checkFormsStatus, FormsConnectionStatus, disconnectForms } from '../../lib/forms'
+import { connectSheets, checkSheetsStatus, SheetsConnectionStatus, disconnectSheets } from '../../lib/sheets'
+import { connectDocs, checkDocsStatus, DocsConnectionStatus, disconnectDocs } from '../../lib/docs'
 import { connectCalendar, checkCalendarStatus, CalendarConnectionStatus, disconnectCalendar } from '../../lib/calendar'
-import { checkMeetStatus, MeetConnectionStatus, disconnectMeet } from '../../lib/meet'
+import { connectMeet, checkMeetStatus, MeetConnectionStatus, disconnectMeet } from '../../lib/meet'
+import { checkMicrosoftStatus, connectMicrosoftApp, disconnectMicrosoftApp, MicrosoftConnectionStatus } from '../../lib/microsoft'
 import { MainAgentContent } from '../../components/MainAgentContent'
 import ProfileDropdown from '../../components/kokonutui/profile-dropdown'
 import AppsIntegrations from '../../components/apps-integrations'
@@ -33,6 +34,10 @@ function Dashboard() {
   const [docsStatus, setDocsStatus] = useState<DocsConnectionStatus>({ connected: false, email: null })
   const [calendarStatus, setCalendarStatus] = useState<CalendarConnectionStatus>({ connected: false })
   const [meetStatus, setMeetStatus] = useState<MeetConnectionStatus>({ connected: false })
+  const [microsoftStatus, setMicrosoftStatus] = useState<MicrosoftConnectionStatus>({ 
+    connected: false, 
+    apps: { outlook: false, calendar: false, onedrive: false, excel: false, teams: false, word: false } 
+  })
   const [isConnecting, setIsConnecting] = useState(false)
   const [isGithubConnecting, setIsGithubConnecting] = useState(false)
   const [gmailStats, setGmailStats] = useState<any>(null)
@@ -184,6 +189,11 @@ function Dashboard() {
         const meetStatusResult = await checkMeetStatus()
         setMeetStatus(meetStatusResult)
         console.log('Meet status:', meetStatusResult)
+
+        // Microsoft 365 status
+        const microsoftStatusResult = await checkMicrosoftStatus()
+        setMicrosoftStatus(microsoftStatusResult)
+        console.log('Microsoft status:', microsoftStatusResult)
       } catch (error) {
         console.error('Error checking connection status:', error)
       }
@@ -191,10 +201,19 @@ function Dashboard() {
     
     // Check if we just came back from Docs OAuth
     const docsConnected = localStorage.getItem('docs_connected')
+    // Check if we just came back from Microsoft OAuth
+    const microsoftConnected = localStorage.getItem('microsoft_connected')
+    
     if (docsConnected === 'true') {
       console.log('Detected Docs connection, refreshing status...')
       localStorage.removeItem('docs_connected')
       // Add a small delay to ensure DB write is complete
+      setTimeout(() => {
+        checkConnections()
+      }, 500)
+    } else if (microsoftConnected === 'true') {
+      console.log('Detected Microsoft connection, refreshing status...')
+      localStorage.removeItem('microsoft_connected')
       setTimeout(() => {
         checkConnections()
       }, 500)
@@ -296,6 +315,20 @@ function Dashboard() {
     }
   }
 
+  // Handle Forms connection
+  const handleFormsConnect = async () => {
+    if (formsStatus.connected) {
+      return
+    }
+
+    try {
+      await connectForms()
+    } catch (error) {
+      console.error('Error connecting Forms:', error)
+      alert('Failed to connect Google Forms. Please try again.')
+    }
+  }
+
   // Handle Forms disconnect
   const handleFormsDisconnect = async () => {
     if (!formsStatus.connected) {
@@ -315,6 +348,20 @@ function Dashboard() {
         console.error('Error disconnecting Forms:', error)
         alert('Failed to disconnect Google Forms. Please try again.')
       }
+    }
+  }
+
+  // Handle Sheets connection
+  const handleSheetsConnect = async () => {
+    if (sheetsStatus.connected) {
+      return
+    }
+
+    try {
+      await connectSheets()
+    } catch (error) {
+      console.error('Error connecting Sheets:', error)
+      alert('Failed to connect Google Sheets. Please try again.')
     }
   }
 
@@ -339,6 +386,20 @@ function Dashboard() {
       }
     }
     await refreshConnectionStatus()
+  }
+
+  // Handle Docs connection
+  const handleDocsConnect = async () => {
+    if (docsStatus.connected) {
+      return
+    }
+
+    try {
+      await connectDocs()
+    } catch (error) {
+      console.error('Error connecting Docs:', error)
+      alert('Failed to connect Google Docs. Please try again.')
+    }
   }
 
   // Handle Docs disconnect
@@ -402,6 +463,20 @@ function Dashboard() {
     }
   }
 
+  // Handle Meet connection
+  const handleMeetConnect = async () => {
+    if (meetStatus.connected) {
+      return
+    }
+
+    try {
+      await connectMeet()
+    } catch (error) {
+      console.error('Error connecting Meet:', error)
+      alert('Failed to connect Google Meet. Please try again.')
+    }
+  }
+
   // Handle Meet disconnect
   const handleMeetDisconnect = async () => {
     if (!meetStatus.connected) {
@@ -420,6 +495,228 @@ function Dashboard() {
       } catch (error) {
         console.error('Error disconnecting Meet:', error)
         alert('Failed to disconnect Google Meet. Please try again.')
+      }
+    }
+  }
+
+  // Handle Microsoft Outlook connection
+  const handleOutlookConnect = async () => {
+    if (microsoftStatus.apps?.outlook) {
+      return
+    }
+    try {
+      await connectMicrosoftApp('outlook')
+    } catch (error) {
+      console.error('Error connecting Outlook:', error)
+      alert('Failed to connect Outlook. Please try again.')
+    }
+  }
+
+  // Handle Microsoft Outlook disconnect
+  const handleOutlookDisconnect = async () => {
+    if (!microsoftStatus.apps?.outlook) {
+      return
+    }
+    if (confirm('Are you sure you want to disconnect Outlook?')) {
+      try {
+        const result = await disconnectMicrosoftApp('outlook')
+        if (result.success) {
+          setMicrosoftStatus(prev => ({
+            ...prev,
+            apps: { ...prev.apps, outlook: false }
+          }))
+          alert('Outlook disconnected successfully')
+        } else {
+          alert(result.error || 'Failed to disconnect Outlook')
+        }
+      } catch (error) {
+        console.error('Error disconnecting Outlook:', error)
+        alert('Failed to disconnect Outlook. Please try again.')
+      }
+    }
+  }
+
+  // Handle Microsoft Calendar connection
+  const handleMsCalendarConnect = async () => {
+    if (microsoftStatus.apps?.calendar) {
+      return
+    }
+    try {
+      await connectMicrosoftApp('calendar')
+    } catch (error) {
+      console.error('Error connecting Microsoft Calendar:', error)
+      alert('Failed to connect Microsoft Calendar. Please try again.')
+    }
+  }
+
+  // Handle Microsoft Calendar disconnect
+  const handleMsCalendarDisconnect = async () => {
+    if (!microsoftStatus.apps?.calendar) {
+      return
+    }
+    if (confirm('Are you sure you want to disconnect Microsoft Calendar?')) {
+      try {
+        const result = await disconnectMicrosoftApp('calendar')
+        if (result.success) {
+          setMicrosoftStatus(prev => ({
+            ...prev,
+            apps: { ...prev.apps, calendar: false }
+          }))
+          alert('Microsoft Calendar disconnected successfully')
+        } else {
+          alert(result.error || 'Failed to disconnect Microsoft Calendar')
+        }
+      } catch (error) {
+        console.error('Error disconnecting Microsoft Calendar:', error)
+        alert('Failed to disconnect Microsoft Calendar. Please try again.')
+      }
+    }
+  }
+
+  // Handle OneDrive connection
+  const handleOneDriveConnect = async () => {
+    if (microsoftStatus.apps?.onedrive) {
+      return
+    }
+    try {
+      await connectMicrosoftApp('onedrive')
+    } catch (error) {
+      console.error('Error connecting OneDrive:', error)
+      alert('Failed to connect OneDrive. Please try again.')
+    }
+  }
+
+  // Handle OneDrive disconnect
+  const handleOneDriveDisconnect = async () => {
+    if (!microsoftStatus.apps?.onedrive) {
+      return
+    }
+    if (confirm('Are you sure you want to disconnect OneDrive?')) {
+      try {
+        const result = await disconnectMicrosoftApp('onedrive')
+        if (result.success) {
+          setMicrosoftStatus(prev => ({
+            ...prev,
+            apps: { ...prev.apps, onedrive: false }
+          }))
+          alert('OneDrive disconnected successfully')
+        } else {
+          alert(result.error || 'Failed to disconnect OneDrive')
+        }
+      } catch (error) {
+        console.error('Error disconnecting OneDrive:', error)
+        alert('Failed to disconnect OneDrive. Please try again.')
+      }
+    }
+  }
+
+  // Handle Excel connection
+  const handleExcelConnect = async () => {
+    if (microsoftStatus.apps?.excel) {
+      return
+    }
+    try {
+      await connectMicrosoftApp('excel')
+    } catch (error) {
+      console.error('Error connecting Excel:', error)
+      alert('Failed to connect Excel. Please try again.')
+    }
+  }
+
+  // Handle Excel disconnect
+  const handleExcelDisconnect = async () => {
+    if (!microsoftStatus.apps?.excel) {
+      return
+    }
+    if (confirm('Are you sure you want to disconnect Excel?')) {
+      try {
+        const result = await disconnectMicrosoftApp('excel')
+        if (result.success) {
+          setMicrosoftStatus(prev => ({
+            ...prev,
+            apps: { ...prev.apps, excel: false }
+          }))
+          alert('Excel disconnected successfully')
+        } else {
+          alert(result.error || 'Failed to disconnect Excel')
+        }
+      } catch (error) {
+        console.error('Error disconnecting Excel:', error)
+        alert('Failed to disconnect Excel. Please try again.')
+      }
+    }
+  }
+
+  // Handle Teams connection
+  const handleTeamsConnect = async () => {
+    if (microsoftStatus.apps?.teams) {
+      return
+    }
+    try {
+      await connectMicrosoftApp('teams')
+    } catch (error) {
+      console.error('Error connecting Teams:', error)
+      alert('Failed to connect Teams. Please try again.')
+    }
+  }
+
+  // Handle Teams disconnect
+  const handleTeamsDisconnect = async () => {
+    if (!microsoftStatus.apps?.teams) {
+      return
+    }
+    if (confirm('Are you sure you want to disconnect Microsoft Teams?')) {
+      try {
+        const result = await disconnectMicrosoftApp('teams')
+        if (result.success) {
+          setMicrosoftStatus(prev => ({
+            ...prev,
+            apps: { ...prev.apps, teams: false }
+          }))
+          alert('Microsoft Teams disconnected successfully')
+        } else {
+          alert(result.error || 'Failed to disconnect Teams')
+        }
+      } catch (error) {
+        console.error('Error disconnecting Teams:', error)
+        alert('Failed to disconnect Teams. Please try again.')
+      }
+    }
+  }
+
+  // Handle Word connection
+  const handleWordConnect = async () => {
+    if (microsoftStatus.apps?.word) {
+      return
+    }
+    try {
+      await connectMicrosoftApp('word')
+    } catch (error) {
+      console.error('Error connecting Word:', error)
+      alert('Failed to connect Word. Please try again.')
+    }
+  }
+
+  // Handle Word disconnect
+  const handleWordDisconnect = async () => {
+    if (!microsoftStatus.apps?.word) {
+      return
+    }
+    if (confirm('Are you sure you want to disconnect Microsoft Word?')) {
+      try {
+        const result = await disconnectMicrosoftApp('word')
+        if (result.success) {
+          setMicrosoftStatus(prev => ({
+            ...prev,
+            apps: { ...prev.apps, word: false }
+          }))
+          alert('Microsoft Word disconnected successfully')
+        } else {
+          alert(result.error || 'Failed to disconnect Word')
+        }
+      } catch (error) {
+        console.error('Error disconnecting Word:', error)
+        alert('Failed to disconnect Word. Please try again.')
       }
     }
   }
@@ -467,6 +764,11 @@ function Dashboard() {
       const meetStatusResult = await checkMeetStatus()
       setMeetStatus(meetStatusResult)
       console.log('Updated Meet status:', meetStatusResult)
+
+      // Refresh Microsoft 365 status
+      const microsoftStatusResult = await checkMicrosoftStatus()
+      setMicrosoftStatus(microsoftStatusResult)
+      console.log('Updated Microsoft status:', microsoftStatusResult)
     } catch (error) {
       console.error('Error refreshing connection status:', error)
     }
@@ -783,22 +1085,35 @@ function Dashboard() {
             docsStatus={docsStatus}
             calendarStatus={calendarStatus}
             meetStatus={meetStatus}
+            microsoftStatus={microsoftStatus}
             isConnecting={isConnecting}
             isGithubConnecting={isGithubConnecting}
             onGmailConnect={handleGmailConnect}
             onGmailDisconnect={handleGmailDisconnect}
             onGithubConnect={handleGithubConnect}
             onGithubDisconnect={handleGithubDisconnect}
-            onFormsConnect={() => window.location.href = '/forms'}
+            onFormsConnect={handleFormsConnect}
             onFormsDisconnect={handleFormsDisconnect}
-            onSheetsConnect={() => window.location.href = '/sheets'}
+            onSheetsConnect={handleSheetsConnect}
             onSheetsDisconnect={handleSheetsDisconnect}
-            onDocsConnect={() => window.location.href = '/docs'}
+            onDocsConnect={handleDocsConnect}
             onDocsDisconnect={handleDocsDisconnect}
             onCalendarConnect={handleCalendarConnect}
             onCalendarDisconnect={handleCalendarDisconnect}
-            onMeetConnect={() => window.location.href = '/meet'}
+            onMeetConnect={handleMeetConnect}
             onMeetDisconnect={handleMeetDisconnect}
+            onOutlookConnect={handleOutlookConnect}
+            onOutlookDisconnect={handleOutlookDisconnect}
+            onMsCalendarConnect={handleMsCalendarConnect}
+            onMsCalendarDisconnect={handleMsCalendarDisconnect}
+            onOneDriveConnect={handleOneDriveConnect}
+            onOneDriveDisconnect={handleOneDriveDisconnect}
+            onExcelConnect={handleExcelConnect}
+            onExcelDisconnect={handleExcelDisconnect}
+            onTeamsConnect={handleTeamsConnect}
+            onTeamsDisconnect={handleTeamsDisconnect}
+            onWordConnect={handleWordConnect}
+            onWordDisconnect={handleWordDisconnect}
           />
         )}
       </div>

@@ -45,6 +45,21 @@ export async function getDocsAuthUrl(): Promise<{ authUrl: string }> {
 }
 
 /**
+ * Start Docs OAuth flow
+ */
+export async function connectDocs(): Promise<void> {
+  try {
+    const { authUrl } = await getDocsAuthUrl();
+    
+    // Open OAuth URL in current window
+    window.location.href = authUrl;
+  } catch (error) {
+    console.error('Error starting Docs OAuth:', error);
+    throw error;
+  }
+}
+
+/**
  * Check if user has connected Google Docs
  */
 export async function checkDocsStatus(): Promise<DocsConnectionStatus> {

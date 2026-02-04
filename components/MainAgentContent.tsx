@@ -4,6 +4,7 @@ import '@fontsource/inter/400.css';
 import '@fontsource/inter/600.css';
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 
 // Custom scrollbar styles
 const scrollbarStyles = `
@@ -622,17 +623,83 @@ const parseDurationToMinutes = (duration: string): number => {
   return hours * 60 + mins || 120;
 };
 
+// Helper to get the correct app logo based on agent and action type
+const getAppLogo = (agentName?: string, actionType?: string): { src: string; alt: string } => {
+  // Microsoft services
+  if (agentName === 'microsoft') {
+    if (actionType === 'send_email' || actionType?.includes('email')) {
+      return { src: '/Microsoft_Outlook_Icon_(2025–present).svg.png', alt: 'Outlook' };
+    }
+    if (actionType === 'create_event' || actionType?.includes('calendar')) {
+      return { src: '/microsoft-calendar-logo.png', alt: 'Microsoft Calendar' };
+    }
+    if (actionType === 'create_spreadsheet' || actionType?.includes('excel') || actionType?.includes('sheet') || actionType?.includes('workbook')) {
+      return { src: '/Microsoft_Office_Excel_(2025–present).svg.png', alt: 'Microsoft Excel' };
+    }
+    if (actionType === 'create_document' || actionType?.includes('word') || actionType?.includes('doc')) {
+      return { src: '/Microsoft_Office_Word_(2025–present).svg.png', alt: 'Microsoft Word' };
+    }
+    if (actionType?.includes('teams')) {
+      return { src: '/Microsoft_Office_Teams_(2025–present).svg.png', alt: 'Microsoft Teams' };
+    }
+    if (actionType?.includes('onedrive') || actionType?.includes('file')) {
+      return { src: '/Microsoft_OneDrive_Icon_(2025_-_present).svg.png', alt: 'OneDrive' };
+    }
+    // Default Microsoft
+    return { src: '/Microsoft_Outlook_Icon_(2025–present).svg.png', alt: 'Microsoft' };
+  }
+  
+  // Google services
+  if (agentName === 'gmail' || actionType === 'send_email') {
+    return { src: '/gmail.png', alt: 'Gmail' };
+  }
+  if (agentName === 'calendar' || actionType === 'create_event') {
+    return { src: '/Google_Calendar_icon_(2020).svg.png', alt: 'Google Calendar' };
+  }
+  if (agentName === 'docs' || actionType === 'create_document') {
+    return { src: '/Google_Docs_logo_(2014-2020).svg.png', alt: 'Google Docs' };
+  }
+  if (agentName === 'sheets') {
+    return { src: '/Google_Sheets_logo_(2014-2020).svg.png', alt: 'Google Sheets' };
+  }
+  if (agentName === 'forms' || actionType === 'create_form') {
+    return { src: '/Google_Forms_2020_Logo.svg.png', alt: 'Google Forms' };
+  }
+  if (agentName === 'meet' || actionType === 'create_meeting') {
+    return { src: '/meet_new.png', alt: 'Google Meet' };
+  }
+  if (agentName === 'drive') {
+    return { src: '/Google_Drive.png', alt: 'Google Drive' };
+  }
+  
+  // GitHub
+  if (agentName === 'github') {
+    return { src: '/github.png', alt: 'GitHub' };
+  }
+  
+  // Flights
+  if (agentName === 'flights') {
+    return { src: '/airIndia.png', alt: 'Flights' };
+  }
+  
+  // Default
+  return { src: '/polaris.png', alt: 'Polaris' };
+};
+
 // Preview Content Renderer - Parses confirmation preview and renders beautifully
-const PreviewContentRenderer = ({ content, actionType }: { content: string; actionType?: string }) => {
+const PreviewContentRenderer = ({ content, actionType, agentName }: { content: string; actionType?: string; agentName?: string }) => {
   const lines = content.split('\n').filter(line => line.trim());
+  
+  // Check if this is a Microsoft email
+  const isMicrosoftEmail = agentName === 'microsoft';
   
   // Determine the icon and color scheme based on action type
   const getActionConfig = (type?: string) => {
     switch (type) {
       case 'send_email':
         return { 
-          icon: <Mail className="w-5 h-5 text-red-400" />, 
-          iconBg: 'bg-red-500/10',
+          icon: <Mail className={`w-5 h-5 ${isMicrosoftEmail ? 'text-blue-400' : 'text-red-400'}`} />, 
+          iconBg: isMicrosoftEmail ? 'bg-blue-500/10' : 'bg-red-500/10',
           labelColor: 'text-gray-400'
         };
       case 'create_event':
@@ -706,7 +773,7 @@ const PreviewContentRenderer = ({ content, actionType }: { content: string; acti
         const trimmedLabel = label.trim();
         
         // Check if this starts a body/content section
-        if (['Intent/Content', 'Content', 'Body', 'Initial Content', 'Description'].includes(trimmedLabel)) {
+        if (['Intent/Content', 'Content', 'Body', 'Initial Content', 'Description', 'Email Content'].includes(trimmedLabel)) {
           inBody = true;
           if (value.trim()) {
             bodyContent = value.trim();
@@ -774,60 +841,61 @@ const PreviewContentRenderer = ({ content, actionType }: { content: string; acti
     const bccField = parsed.fields.find(f => f.label.toLowerCase() === 'bcc');
     const subjectField = parsed.fields.find(f => f.label.toLowerCase() === 'subject');
     const bodyField = parsed.fields.find(f => f.isBody);
+    
+    // Also check for "Email Content" as body field
+    const emailContentField = parsed.fields.find(f => f.label.toLowerCase() === 'email content');
+    const actualBodyField = bodyField || emailContentField;
 
     return (
       <div className="space-y-0">
-        {/* Gmail Header with icon and recipient */}
-        <div className="flex items-center gap-3 pb-4 border-b border-[#2a2a2a]">
-          <div className="w-11 h-11 rounded-xl bg-red-500/10 flex items-center justify-center overflow-hidden">
-            <img 
-              src="/gmail.png" 
-              alt="Gmail" 
-              className="w-6 h-6 object-contain"
-              onError={(e) => {
-                // Fallback to Mail icon if image fails to load
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.parentElement?.classList.add('fallback-icon');
-              }}
-            />
-          </div>
+        {/* Email Header with logo */}
+        <div className="flex items-center gap-4 pb-4 border-b border-white/[0.06]">
+          <Image 
+            src={isMicrosoftEmail ? '/Microsoft_Outlook_Icon_(2025–present).svg.png' : '/gmail.png'} 
+            alt={isMicrosoftEmail ? 'Outlook' : 'Gmail'} 
+            width={32} 
+            height={32}
+            className="object-contain"
+          />
           <div className="flex-1">
-            <span className="text-gray-500 text-xs">To:</span>
-            <p className="text-emerald-400 font-medium text-sm">{toField?.value || 'No recipient'}</p>
+            <span className="text-white/40 text-xs">To:</span>
+            <p className={`font-medium text-sm ${isMicrosoftEmail ? 'text-blue-400' : 'text-emerald-400'}`}>
+              {toField?.value || 'No recipient'}
+            </p>
           </div>
-          <span className="text-xs text-gray-500 bg-[#252525] px-2.5 py-1 rounded-md font-mono">sendEmail</span>
+          <span className="text-xs text-white/50 bg-white/[0.04] border border-white/[0.06] px-2.5 py-1 rounded-lg font-mono">sendEmail</span>
         </div>
         
         {/* CC/BCC if present */}
         {(ccField || bccField) && (
-          <div className="flex gap-6 py-3 border-b border-[#2a2a2a]">
+          <div className="flex gap-6 py-3 border-b border-white/[0.06]">
             {ccField && (
               <div>
-                <span className="text-gray-500 text-xs">CC: </span>
-                <span className="text-gray-300 text-xs">{ccField.value}</span>
+                <span className="text-white/40 text-xs">CC: </span>
+                <span className="text-white/70 text-xs">{ccField.value}</span>
               </div>
             )}
             {bccField && (
               <div>
-                <span className="text-gray-500 text-xs">BCC: </span>
-                <span className="text-gray-300 text-xs">{bccField.value}</span>
+                <span className="text-white/40 text-xs">BCC: </span>
+                <span className="text-white/70 text-xs">{bccField.value}</span>
               </div>
             )}
           </div>
         )}
         
         {/* Subject */}
-        <div className="py-4 border-b border-[#2a2a2a]">
-          <p className="text-gray-500 text-xs mb-1.5">Subject</p>
+        <div className="py-4 border-b border-white/[0.06]">
+          <p className="text-white/40 text-xs mb-1.5">Subject</p>
           <p className="text-white font-medium text-[15px]">{subjectField?.value || 'No subject'}</p>
         </div>
         
         {/* Email Body */}
-        {bodyField && bodyField.value && (
+        {actualBodyField && actualBodyField.value && (
           <div className="pt-4">
-            <p className="text-gray-500 text-xs mb-2">Email Content</p>
-            <div className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed bg-[#141414] rounded-xl p-4 border border-[#252525]">
-              {bodyField.value}
+            <p className="text-white/40 text-xs mb-2">Email Content</p>
+            <div className="text-white/80 text-sm whitespace-pre-wrap leading-relaxed bg-white/[0.02] rounded-xl p-4 border border-white/[0.06]">
+              {actualBodyField.value}
             </div>
           </div>
         )}
@@ -835,14 +903,14 @@ const PreviewContentRenderer = ({ content, actionType }: { content: string; acti
     );
   }
 
-  // For other action types - render as clean card
+  // For other action types - render as clean card with glassmorphic styling
   return (
     <div className="space-y-3">
       {/* Fields */}
       {parsed.fields.filter(f => !f.isBody).map((field, idx) => (
         <div key={idx} className="flex items-start gap-3">
-          <span className="text-gray-500 text-sm min-w-[100px] flex-shrink-0">{field.label}:</span>
-          <span className={`text-sm ${field.label.toLowerCase() === 'title' || field.label.toLowerCase() === 'name' ? 'text-white font-medium' : 'text-gray-300'}`}>
+          <span className="text-white/40 text-sm min-w-[100px] flex-shrink-0">{field.label}:</span>
+          <span className={`text-sm ${field.label.toLowerCase() === 'title' || field.label.toLowerCase() === 'name' ? 'text-white font-medium' : 'text-white/70'}`}>
             {field.value}
           </span>
         </div>
@@ -850,20 +918,20 @@ const PreviewContentRenderer = ({ content, actionType }: { content: string; acti
       
       {/* Questions (for forms) */}
       {parsed.questions && parsed.questions.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-[#2a2a2a]">
-          <p className="text-gray-400 text-xs uppercase tracking-wide mb-3">Questions</p>
+        <div className="mt-4 pt-4 border-t border-white/[0.06]">
+          <p className="text-white/40 text-xs uppercase tracking-wide mb-3">Questions</p>
           <div className="space-y-3">
             {parsed.questions.map((q, idx) => (
-              <div key={idx} className="bg-[#141414] rounded-lg p-3 border border-[#252525]">
+              <div key={idx} className="bg-white/[0.02] rounded-xl p-3 border border-white/[0.06]">
                 <div className="flex items-start gap-2">
                   <span className="text-emerald-400 font-medium text-sm">{q.number}.</span>
                   <div className="flex-1">
-                    <p className="text-gray-200 text-sm">{q.text}</p>
+                    <p className="text-white/80 text-sm">{q.text}</p>
                     {q.options && q.options.length > 0 && (
                       <div className="mt-2 space-y-1">
                         {q.options.map((opt, optIdx) => (
-                          <div key={optIdx} className="flex items-center gap-2 text-xs text-gray-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-gray-600"></span>
+                          <div key={optIdx} className="flex items-center gap-2 text-xs text-white/50">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>
                             {opt}
                           </div>
                         ))}
@@ -879,8 +947,8 @@ const PreviewContentRenderer = ({ content, actionType }: { content: string; acti
       
       {/* Body content */}
       {parsed.fields.find(f => f.isBody) && (
-        <div className="mt-3 pt-3 border-t border-[#2a2a2a]">
-          <div className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed bg-[#141414] rounded-lg p-3 border border-[#252525]">
+        <div className="mt-3 pt-3 border-t border-white/[0.06]">
+          <div className="text-white/70 text-sm whitespace-pre-wrap leading-relaxed bg-white/[0.02] rounded-xl p-4 border border-white/[0.06]">
             {parsed.fields.find(f => f.isBody)?.value}
           </div>
         </div>
@@ -903,6 +971,9 @@ const CollapsibleConfirmedAction = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
+  // Get the app logo
+  const appLogo = getAppLogo(agentName, actionType);
+  
   // Extract recipient email from content for email actions
   const getRecipientInfo = () => {
     if (actionType === 'send_email') {
@@ -916,62 +987,55 @@ const CollapsibleConfirmedAction = ({
 
   const recipientEmail = getRecipientInfo();
   
-  // Get action icon based on type
-  const getActionIcon = () => {
-    if (actionType === 'send_email') {
-      return <Mail className="w-5 h-5 text-red-400" />;
-    } else if (actionType === 'create_event') {
-      return <Calendar className="w-5 h-5 text-blue-400" />;
-    } else if (actionType === 'create_document') {
-      return <FileText className="w-5 h-5 text-blue-400" />;
-    } else if (actionType === 'create_form') {
-      return <ClipboardList className="w-5 h-5 text-purple-400" />;
-    }
-    return <Check className="w-4 h-4 text-emerald-400" />;
+  // Get action badge text
+  const getActionBadge = () => {
+    if (actionType === 'send_email') return 'sendEmail';
+    if (actionType === 'create_event') return 'createEvent';
+    if (actionType === 'create_document') return 'createDoc';
+    if (actionType === 'create_form') return 'createForm';
+    if (actionType === 'create_meeting') return 'createMeet';
+    return 'confirmed';
   };
   
   return (
     <div className="max-w-3xl w-full">
-      {/* Collapsed Bar - Gmail-style design */}
+      {/* Collapsible Bar */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] px-4 py-2.5 hover:bg-[#1f1f1f] transition-all duration-200"
+        className="w-full rounded-xl bg-[#1a1a1a]/80 border border-white/[0.06] px-4 py-2.5 hover:bg-[#1f1f1f]/80 hover:border-white/[0.08] transition-all duration-300"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            {/* Icon based on action type */}
+            {/* App Logo */}
             <div className="flex-shrink-0">
-              {getActionIcon()}
+              <Image 
+                src={appLogo.src} 
+                alt={appLogo.alt} 
+                width={22} 
+                height={22} 
+                className="object-contain"
+              />
             </div>
             
             {/* Main info */}
             <div className="text-left flex-1 min-w-0">
-              {actionType === 'send_email' && recipientEmail ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-400">To:</span>
-                  <span className="text-sm font-medium text-emerald-400 truncate">{recipientEmail}</span>
-                </div>
-              ) : (
-                <span className="text-sm font-medium text-white truncate block">{description || 'Action Confirmed'}</span>
+              <span className="text-sm font-medium text-white/90 truncate block">{description || 'Action Confirmed'}</span>
+              {actionType === 'send_email' && recipientEmail && (
+                <span className="text-xs text-white/50 truncate block mt-0.5">To: {recipientEmail}</span>
               )}
             </div>
           </div>
           
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2.5 flex-shrink-0">
             {/* Action badge */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20">
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/20">
               <Check className="w-3 h-3 text-emerald-400" />
-              <span className="text-xs font-medium text-emerald-400">
-                {actionType === 'send_email' ? 'sendEmail' : 
-                 actionType === 'create_event' ? 'createEvent' :
-                 actionType === 'create_document' ? 'createDoc' :
-                 actionType === 'create_form' ? 'createForm' : 'confirmed'}
-              </span>
+              <span className="text-xs font-medium text-emerald-400">{getActionBadge()}</span>
             </div>
             
             {/* Dropdown arrow */}
-            <div className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-gray-400">
+            <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="text-white/40">
                 <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
@@ -979,37 +1043,10 @@ const CollapsibleConfirmedAction = ({
         </div>
       </button>
 
-      {/* Expanded Content - Full preview panel */}
+      {/* Expanded Content */}
       {isExpanded && (
-        <div className="mt-3 rounded-2xl bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden shadow-xl">
-          {/* Action Type Header */}
-          <div className="px-5 py-3.5 flex items-center justify-between border-b border-[#2a2a2a]">
-            <div className="flex items-center gap-2.5">
-              {actionType === 'send_email' ? (
-                <div className="w-5 h-5 bg-red-500/20 rounded flex items-center justify-center">
-                  <Mail className="w-3 h-3 text-red-400" />
-                </div>
-              ) : (
-                <span className="text-lg">
-                  {getActionTypeIcon(actionType || 'unknown')}
-                </span>
-              )}
-              <span className="text-sm font-medium text-white">
-                {description || 'Action Preview'}
-              </span>
-            </div>
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-md ${
-              agentName === 'gmail' 
-                ? 'text-emerald-400 bg-emerald-400/10' 
-                : agentName === 'calendar'
-                ? 'text-blue-400 bg-blue-400/10'
-                : 'text-gray-400 bg-gray-400/10'
-            }`}>
-              {formatAgentName(agentName || 'agent')}
-            </span>
-          </div>
-          
-          {/* Preview Content */}
+        <div className="mt-1.5 rounded-xl bg-[#1a1a1a]/90 border border-white/[0.06] overflow-hidden">
+          {/* Preview Content - No duplicate header */}
           <div className="p-5">
             <div 
               className="space-y-3"
@@ -1020,9 +1057,9 @@ const CollapsibleConfirmedAction = ({
               }}
             >
               {content ? (
-                <PreviewContentRenderer content={content} actionType={actionType} />
+                <PreviewContentRenderer content={content} actionType={actionType} agentName={agentName} />
               ) : (
-                <span className="text-gray-500">No preview content available</span>
+                <span className="text-white/40">No preview content available</span>
               )}
             </div>
           </div>
@@ -2007,91 +2044,98 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                       <div className="whitespace-pre-wrap">{message.content}</div>
                     </div>
                   ) : (message as any).isPendingConfirmation ? (
-                    // Confirmation request message - Bhindi.io style design
-                    <div className="max-w-3xl w-full">
-                      {/* Preview Card - Sleek dark container */}
-                      <div className="rounded-2xl bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden shadow-xl">
-                        {/* Action Type Header - Bhindi style with icon and colored badge */}
-                        <div className="px-5 py-3.5 flex items-center justify-between border-b border-[#2a2a2a]">
-                          <div className="flex items-center gap-2.5">
-                            {(message as any).confirmationData?.actionType === 'send_email' ? (
-                              <div className="w-5 h-5 bg-red-500/20 rounded flex items-center justify-center">
-                                <Mail className="w-3 h-3 text-red-400" />
+                    // Confirmation request message - Glassmorphic design with real logos
+                    (() => {
+                      const confirmData = (message as any).confirmationData;
+                      const appLogo = getAppLogo(confirmData?.agentName, confirmData?.actionType);
+                      return (
+                        <div className="max-w-3xl w-full">
+                          {/* Preview Card */}
+                          <div className="rounded-2xl bg-[#1a1a1a]/90 border border-white/[0.06] overflow-hidden">
+                            {/* Header with logo and title */}
+                            <div className="px-5 py-4 flex items-center justify-between border-b border-white/[0.06]">
+                              <div className="flex items-center gap-3">
+                                {/* App Logo */}
+                                <Image 
+                                  src={appLogo.src} 
+                                  alt={appLogo.alt} 
+                                  width={32} 
+                                  height={32} 
+                                  className="object-contain"
+                                />
+                                <span className="text-sm font-medium text-white/90">
+                                  {confirmData?.description || 'Action Preview'}
+                                </span>
                               </div>
-                            ) : (
-                              <span className="text-lg">
-                                {getActionTypeIcon((message as any).confirmationData?.actionType || 'unknown')}
+                              <span className={`text-xs font-medium px-3 py-1.5 rounded-lg backdrop-blur-sm ${
+                                confirmData?.agentName === 'gmail' 
+                                  ? 'text-emerald-400 bg-emerald-400/10 border border-emerald-400/20' 
+                                  : confirmData?.agentName === 'microsoft'
+                                  ? 'text-blue-400 bg-blue-400/10 border border-blue-400/20'
+                                  : confirmData?.agentName === 'calendar'
+                                  ? 'text-blue-400 bg-blue-400/10 border border-blue-400/20'
+                                  : 'text-white/60 bg-white/5 border border-white/10'
+                              }`}>
+                                {formatAgentName(confirmData?.agentName || 'agent')}
                               </span>
-                            )}
-                            <span className="text-sm font-medium text-white">
-                              {(message as any).confirmationData?.description || 'Action Preview'}
-                            </span>
+                            </div>
+                            
+                            {/* Preview Content */}
+                            <div className="p-5">
+                              <div 
+                                className="space-y-3"
+                                style={{ 
+                                  fontFamily: 'Inter, "Inter Fallback"',
+                                  fontSize: '14px',
+                                  lineHeight: '22px',
+                                }}
+                              >
+                                {message.content ? (
+                                  <PreviewContentRenderer content={message.content} actionType={confirmData?.actionType} agentName={confirmData?.agentName} />
+                                ) : (
+                                  <span className="text-white/40">No preview content available</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <span className={`text-xs font-medium px-2.5 py-1 rounded-md ${
-                            (message as any).confirmationData?.agentName === 'gmail' 
-                              ? 'text-emerald-400 bg-emerald-400/10' 
-                              : (message as any).confirmationData?.agentName === 'calendar'
-                              ? 'text-blue-400 bg-blue-400/10'
-                              : 'text-gray-400 bg-gray-400/10'
-                          }`}>
-                            {formatAgentName((message as any).confirmationData?.agentName || 'agent')}
-                          </span>
-                        </div>
-                        
-                        {/* Preview Content - Clean formatted display */}
-                        <div className="p-5">
-                          <div 
-                            className="space-y-3"
-                            style={{ 
-                              fontFamily: 'Inter, "Inter Fallback"',
-                              fontSize: '14px',
-                              lineHeight: '22px',
-                            }}
-                          >
-                            {message.content ? (
-                              <PreviewContentRenderer content={message.content} actionType={(message as any).confirmationData?.actionType} />
-                            ) : (
-                              <span className="text-gray-500">No preview content available</span>
-                            )}
+                          
+                          {/* Confirmation Bar */}
+                          <div className="mt-3 rounded-xl bg-[#141414]/90 border border-white/[0.06] px-5 py-3.5 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-6 h-6 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                                <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-white/90">Confirmation Required</p>
+                                <p className="text-xs text-white/40">Click confirm to proceed with this action</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={handleCancelAction}
+                                disabled={isConfirming}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#252525] hover:bg-[#303030] border border-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed text-white/70 text-sm font-medium transition-all duration-200"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                Skip
+                              </button>
+                              <button
+                                onClick={handleConfirmAction}
+                                disabled={isConfirming}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-all duration-200"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                {isConfirming ? 'Processing...' : 'Confirm'}
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-2 text-xs text-white/30 text-right">
+                            {(message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)).toLocaleTimeString()}
                           </div>
                         </div>
-                      </div>
-                      
-                      {/* Confirmation Bar - Separate elegant container */}
-                      <div className="mt-3 rounded-xl bg-[#141414] border border-[#252525] px-4 py-3 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-5 h-5 rounded-full border border-gray-600 flex items-center justify-center">
-                            <AlertCircle className="w-3 h-3 text-gray-400" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-200">Confirmation Required</p>
-                            <p className="text-xs text-gray-500">Task paused due to pending confirmation. Click on confirm to proceed.</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={handleCancelAction}
-                            disabled={isConfirming}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#252525] hover:bg-[#303030] disabled:opacity-50 disabled:cursor-not-allowed text-gray-300 text-sm font-medium transition-all duration-200"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                            Skip
-                          </button>
-                          <button
-                            onClick={handleConfirmAction}
-                            disabled={isConfirming}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-all duration-200 shadow-lg shadow-emerald-600/20"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            {isConfirming ? 'Processing...' : 'Confirm'}
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-2 text-xs text-gray-600 text-right">
-                        {(message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)).toLocaleTimeString()}
-                      </div>
-                    </div>
+                      );
+                    })()
                   ) : (message as any).isCanceled ? (
                     // Canceled action message - Minimal style
                     <div className="max-w-3xl w-full">

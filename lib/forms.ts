@@ -146,6 +146,19 @@ export const getFormResponses = async (formId: string): Promise<{
   }
 };
 
+// Start Forms OAuth flow
+export const connectForms = async (): Promise<void> => {
+  try {
+    const authUrl = await getFormsAuthUrl();
+    
+    // Open OAuth URL in current window
+    window.location.href = authUrl;
+  } catch (error) {
+    console.error('Error starting Forms OAuth:', error);
+    throw error;
+  }
+};
+
 // Disconnect Forms
 export const disconnectForms = async (): Promise<{
   success: boolean;

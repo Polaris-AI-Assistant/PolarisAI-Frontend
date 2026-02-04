@@ -383,6 +383,7 @@ export function formatAgentName(agentKey: string): string {
     sheets: 'Sheets',
     flights: 'Flights',
     maps: 'Maps',
+    microsoft: 'Microsoft',
   };
   return names[agentKey] || agentKey;
 }
@@ -401,6 +402,7 @@ export function getAgentIcon(agentKey: string): string {
     sheets: '📊',
     flights: '✈️',
     maps: '🗺️',
+    microsoft: '📧',
   };
   return icons[agentKey] || '🤖';
 }
@@ -419,6 +421,7 @@ export function getAgentColor(agentKey: string): string {
     sheets: 'emerald',
     flights: 'sky',
     maps: 'orange',
+    microsoft: 'blue',
   };
   return colors[agentKey] || 'gray';
 }

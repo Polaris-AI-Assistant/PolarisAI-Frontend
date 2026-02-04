@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <linearGradient id="outlookGrad" x1="24" x2="24" y1="7.187" y2="40.813" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#31abec"/>
+    <stop offset="1" stop-color="#1582d5"/>
+  </linearGradient>
+  <path fill="url(#outlookGrad)" d="M44,24c0,9.391-7.609,17-17,17H11V7h16C36.391,7,44,14.609,44,24z"/>
+  <path fill="#0f5ba1" d="M27,44H11V7h16c9.391,0,17,7.609,17,17v3C44,36.391,36.391,44,27,44z"/>
+  <path fill="#103262" d="M11,24v17l16-8.5L11,24z"/>
+  <linearGradient id="outlookGrad2" x1="4.878" x2="24.122" y1="11.378" y2="36.622" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#31abec"/>
+    <stop offset="1" stop-color="#1582d5"/>
+  </linearGradient>
+  <path fill="url(#outlookGrad2)" d="M27,7H11l-7,7v20l7,7h16c9.391,0,17-7.609,17-17S36.391,7,27,7z"/>
+  <ellipse cx="25" cy="24" fill="#fff" rx="6" ry="9"/>
+</svg>

@@ -48,6 +48,19 @@ export const getSheetsAuthUrl = async (): Promise<string> => {
   }
 };
 
+// Start Sheets OAuth flow
+export const connectSheets = async (): Promise<void> => {
+  try {
+    const authUrl = await getSheetsAuthUrl();
+    
+    // Open OAuth URL in current window
+    window.location.href = authUrl;
+  } catch (error) {
+    console.error('Error starting Sheets OAuth:', error);
+    throw error;
+  }
+};
+
 // Check Sheets connection status
 export const checkSheetsStatus = async (): Promise<SheetsConnectionStatus> => {
   try {

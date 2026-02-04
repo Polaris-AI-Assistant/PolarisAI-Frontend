@@ -14,6 +14,11 @@ interface AppIntegrationProps {
   docsStatus: { connected: boolean; email?: string | null }
   calendarStatus: { connected: boolean; email?: string }
   meetStatus: { connected: boolean; email?: string }
+  microsoftStatus: { 
+    connected: boolean; 
+    email?: string;
+    apps: { outlook: boolean; calendar: boolean; onedrive: boolean; excel: boolean; teams: boolean; word: boolean } 
+  }
   isConnecting: boolean
   isGithubConnecting: boolean
   onGmailConnect: () => void
@@ -30,6 +35,18 @@ interface AppIntegrationProps {
   onCalendarDisconnect: () => void
   onMeetConnect: () => void
   onMeetDisconnect: () => void
+  onOutlookConnect: () => void
+  onOutlookDisconnect: () => void
+  onMsCalendarConnect: () => void
+  onMsCalendarDisconnect: () => void
+  onOneDriveConnect: () => void
+  onOneDriveDisconnect: () => void
+  onExcelConnect: () => void
+  onExcelDisconnect: () => void
+  onTeamsConnect: () => void
+  onTeamsDisconnect: () => void
+  onWordConnect: () => void
+  onWordDisconnect: () => void
 }
 
 export default function AppsIntegrations({
@@ -40,6 +57,7 @@ export default function AppsIntegrations({
   docsStatus,
   calendarStatus,
   meetStatus,
+  microsoftStatus,
   isConnecting,
   isGithubConnecting,
   onGmailConnect,
@@ -56,6 +74,18 @@ export default function AppsIntegrations({
   onCalendarDisconnect,
   onMeetConnect,
   onMeetDisconnect,
+  onOutlookConnect,
+  onOutlookDisconnect,
+  onMsCalendarConnect,
+  onMsCalendarDisconnect,
+  onOneDriveConnect,
+  onOneDriveDisconnect,
+  onExcelConnect,
+  onExcelDisconnect,
+  onTeamsConnect,
+  onTeamsDisconnect,
+  onWordConnect,
+  onWordDisconnect,
 }: AppIntegrationProps) {
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -131,6 +161,67 @@ export default function AppsIntegrations({
       connectedEmail: meetStatus.email,
       onConnect: onMeetConnect,
       onDisconnect: onMeetDisconnect,
+    },
+    // Microsoft 365 Apps
+    {
+      title: "Outlook Mail",
+      description: "Access and manage Microsoft Outlook emails.",
+      iconSrc: "/Microsoft_Outlook_Icon_(2025–present).svg.png",
+      category: "Email",
+      connected: microsoftStatus.apps?.outlook || false,
+      connectedEmail: microsoftStatus.email,
+      onConnect: onOutlookConnect,
+      onDisconnect: onOutlookDisconnect,
+    },
+    {
+      title: "Microsoft Calendar",
+      description: "Schedule events with Microsoft Calendar & Teams.",
+      iconSrc: "/microsoft-calendar-logo.png",
+      category: "Scheduling",
+      connected: microsoftStatus.apps?.calendar || false,
+      connectedEmail: microsoftStatus.email,
+      onConnect: onMsCalendarConnect,
+      onDisconnect: onMsCalendarDisconnect,
+    },
+    {
+      title: "OneDrive",
+      description: "Manage files and folders in Microsoft OneDrive.",
+      iconSrc: "/Microsoft_OneDrive_Icon_(2025_-_present).svg.png",
+      category: "Storage",
+      connected: microsoftStatus.apps?.onedrive || false,
+      connectedEmail: microsoftStatus.email,
+      onConnect: onOneDriveConnect,
+      onDisconnect: onOneDriveDisconnect,
+    },
+    {
+      title: "Excel",
+      description: "Work with Excel spreadsheets stored in OneDrive.",
+      iconSrc: "/Microsoft_Office_Excel_(2025–present).svg.png",
+      category: "Productivity",
+      connected: microsoftStatus.apps?.excel || false,
+      connectedEmail: microsoftStatus.email,
+      onConnect: onExcelConnect,
+      onDisconnect: onExcelDisconnect,
+    },
+    {
+      title: "Microsoft Teams",
+      description: "Access teams, channels, and chat messages.",
+      iconSrc: "/Microsoft_Office_Teams_(2025–present).svg.png",
+      category: "Communication",
+      connected: microsoftStatus.apps?.teams || false,
+      connectedEmail: microsoftStatus.email,
+      onConnect: onTeamsConnect,
+      onDisconnect: onTeamsDisconnect,
+    },
+    {
+      title: "Microsoft Word",
+      description: "Create and manage Word documents in OneDrive.",
+      iconSrc: "/Microsoft_Office_Word_(2025–present).svg.png",
+      category: "Productivity",
+      connected: microsoftStatus.apps?.word || false,
+      connectedEmail: microsoftStatus.email,
+      onConnect: onWordConnect,
+      onDisconnect: onWordDisconnect,
     },
   ]
 

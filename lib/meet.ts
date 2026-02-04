@@ -67,6 +67,19 @@ export const getMeetAuthUrl = async (): Promise<string> => {
   }
 };
 
+// Start Meet OAuth flow
+export const connectMeet = async (): Promise<void> => {
+  try {
+    const authUrl = await getMeetAuthUrl();
+    
+    // Open OAuth URL in current window
+    window.location.href = authUrl;
+  } catch (error) {
+    console.error('Error starting Meet OAuth:', error);
+    throw error;
+  }
+};
+
 // Check Meet connection status
 export const checkMeetStatus = async (): Promise<MeetConnectionStatus> => {
   try {

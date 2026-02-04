@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <linearGradient id="calGrad" x1="24" x2="24" y1="4" y2="44" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#31abec"/>
+    <stop offset="1" stop-color="#1582d5"/>
+  </linearGradient>
+  <path fill="url(#calGrad)" d="M40,6H8C5.791,6,4,7.791,4,10v28c0,2.209,1.791,4,4,4h32c2.209,0,4-1.791,4-4V10C44,7.791,42.209,6,40,6z"/>
+  <path fill="#fff" d="M38,22H10v16h28V22z"/>
+  <path fill="#0f5ba1" d="M38,10v4H10v-4H38z"/>
+  <rect width="4" height="8" x="14" y="4" fill="#0f5ba1"/>
+  <rect width="4" height="8" x="30" y="4" fill="#0f5ba1"/>
+  <rect width="6" height="5" x="12" y="24" fill="#1a73e8"/>
+  <rect width="6" height="5" x="21" y="24" fill="#1a73e8"/>
+  <rect width="6" height="5" x="30" y="24" fill="#1a73e8"/>
+  <rect width="6" height="5" x="12" y="31" fill="#1a73e8"/>
+  <rect width="6" height="5" x="21" y="31" fill="#1a73e8"/>
+</svg>
