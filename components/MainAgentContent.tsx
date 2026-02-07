@@ -41,12 +41,14 @@ import {
 import {
   ChatMessage,
   createNewChatSession,
-  getChatSession,
+  getChatSessionCached,
   updateChatSession,
   deleteChatSession,
   getGroupedChatSessions,
   migrateOldConversation,
   GroupedChats,
+  invalidateChatCache,
+  invalidateChatSessionCache,
 } from '../lib/chatHistory';
 import { addMemory } from '../lib/memory';
 import { getUserLocation, requiresLocation } from '../lib/geolocation';
@@ -1115,40 +1117,56 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     };
   }, []);
 
+  // Track if initial load has been done to prevent duplicate session creation
+  const initialLoadDone = useRef(false);
+
   useEffect(() => {
     if (!isAuthenticated()) {
       router.push('/auth/signin');
       return;
     }
 
+    // Prevent running initialization multiple times
+    if (initialLoadDone.current) {
+      return;
+    }
+    initialLoadDone.current = true;
+
     const initializeChat = async () => {
       await migrateOldConversation();
       loadExamplesAndHealth();
 
+      // If chatId is provided from parent (dashboard), load that session
+      // Otherwise, wait for parent to provide one - don't create our own
       if (chatId) {
         await loadChatSession(chatId);
-      } else {
-        const newSession = await createNewChatSession();
-        if (newSession) {
-          setCurrentChatId(newSession.id);
-          setMessages([]);
-          setShowExamples(true);
-          onChatIdChange?.(newSession.id);
-        }
       }
+      // If no chatId provided, just wait - the parent (dashboard) will provide one
+      // This prevents duplicate session creation between dashboard and MainAgentContent
 
       await loadChatHistory();
     };
 
     initializeChat();
-  }, [router]);
+  }, [router, chatId]);
 
   // Handle chatId changes from parent (dashboard sidebar)
+  // This handles both selecting existing chats and creating new chats
   useEffect(() => {
     if (chatId && chatId !== currentChatId) {
-      // Clear current messages immediately for better UX
+      // Clear current state immediately for better UX
       setMessages([]);
       setShowExamples(true);
+      setInput('');
+      setIsLoading(false);
+      setIsThinking(false);
+      setStreamingMessageId(null);
+      setPendingConfirmation(null);
+      
+      // Update the current chat ID
+      setCurrentChatId(chatId);
+      
+      // Load the chat session (or if it's a new empty session, it will just set empty messages)
       loadChatSession(chatId);
     }
   }, [chatId]);
@@ -1220,26 +1238,35 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
   };
 
   const loadChatSession = async (chatIdToLoad: string) => {
-    const session = await getChatSession(chatIdToLoad);
-    if (session) {
-      setCurrentChatId(session.id);
-      setMessages(session.messages);
-      setShowExamples(session.messages.length === 0);
-    } else {
-      const newSession = await createNewChatSession();
-      if (newSession) {
-        setCurrentChatId(newSession.id);
+    try {
+      // Use cached version for faster loading
+      const session = await getChatSessionCached(chatIdToLoad);
+      if (session) {
+        setCurrentChatId(session.id);
+        setMessages(session.messages || []);
+        setShowExamples(!session.messages || session.messages.length === 0);
+        onChatIdChange?.(session.id);
+      } else {
+        // Session not found - this could be a newly created session that's not yet in the DB
+        // or an invalid session ID. Just set empty state with this ID.
+        console.log('Session not found, treating as new empty session:', chatIdToLoad);
+        setCurrentChatId(chatIdToLoad);
         setMessages([]);
         setShowExamples(true);
-        onChatIdChange?.(newSession.id);
+        onChatIdChange?.(chatIdToLoad);
       }
+    } catch (error) {
+      console.error('Error loading chat session:', error);
+      // On error, still set the chat ID and show empty state
+      setCurrentChatId(chatIdToLoad);
+      setMessages([]);
+      setShowExamples(true);
     }
   };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
-
   const handleSendMessage = async (queryText?: string) => {
     const query = queryText || input.trim();
     
@@ -1862,6 +1889,8 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       setMessages([]);
       setShowExamples(true);
       setInput('');
+      // Invalidate cache and reload
+      invalidateChatCache();
       await loadChatHistory();
       onChatIdChange?.(newSession.id);
     }
@@ -1878,6 +1907,9 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     if (confirm('Delete this chat?')) {
       const success = await deleteChatSession(chatIdToDelete);
       if (success) {
+        // Invalidate caches
+        invalidateChatCache();
+        invalidateChatSessionCache(chatIdToDelete);
         await loadChatHistory();
         
         // If deleting current chat, create new one
@@ -2129,10 +2161,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                               </button>
                             </div>
                           </div>
-                          
-                          <div className="mt-2 text-xs text-white/30 text-right">
-                            {(message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)).toLocaleTimeString()}
-                          </div>
                         </div>
                       );
                     })()
@@ -2149,9 +2177,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                             <p className="text-xs text-gray-600 mt-0.5">The action was not executed</p>
                           </div>
                         </div>
-                      </div>
-                      <div className="mt-2 text-xs text-gray-600 text-right">
-                        {(message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)).toLocaleTimeString()}
                       </div>
                     </div>
                   ) : (message as any).isConfirmed ? (
@@ -2255,9 +2280,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                               </span>
                             </button>
                           )}
-                          <span className="text-gray-500">
-                            {(message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)).toLocaleTimeString()}
-                          </span>
                         </div>
                       </div>
                     </div>

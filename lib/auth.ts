@@ -153,6 +153,15 @@ export const signOut = async (): Promise<void> => {
     clearAuthData();
     console.log("Auth Data Cleared")
     
+    // Clear app caches
+    try {
+      const { useCacheStore } = require('./stores/cacheStore');
+      useCacheStore.getState().clearAllCache();
+      console.log("App caches cleared")
+    } catch (e) {
+      console.error('Error clearing app caches:', e);
+    }
+    
     // Redirect to landing page
     if (typeof window !== 'undefined') {
       window.location.href = '/';

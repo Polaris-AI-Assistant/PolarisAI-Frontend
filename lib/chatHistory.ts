@@ -1,7 +1,9 @@
 // Chat History Management System - Frontend API Client
 // All logic is in the backend, this just makes API calls
+// With caching support for better performance
 
 import { getAuthToken, getStoredUser } from './auth';
+import { useCacheStore } from './stores/cacheStore';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -274,6 +276,7 @@ export const clearAllChatSessions = async (): Promise<boolean> => {
 
 /**
  * Get chat sessions grouped by date (Today, Yesterday, Last 7 days, etc.)
+ * Uses caching for better performance
  */
 export interface GroupedChats {
   today: ChatSession[];
@@ -283,8 +286,8 @@ export interface GroupedChats {
   older: ChatSession[];
 }
 
-export const getGroupedChatSessions = async (): Promise<GroupedChats> => {
-  const sessions = await getAllChatSessions();
+// Helper function to group sessions by date
+const groupSessionsByDate = (sessions: ChatSession[]): GroupedChats => {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today);
@@ -320,6 +323,168 @@ export const getGroupedChatSessions = async (): Promise<GroupedChats> => {
   });
 
   return grouped;
+};
+
+/**
+ * Get grouped chat sessions with caching support
+ * @param forceRefresh - If true, bypasses cache and fetches fresh data
+ */
+export const getGroupedChatSessions = async (forceRefresh: boolean = false): Promise<GroupedChats> => {
+  const cacheStore = useCacheStore.getState();
+  
+  // Check cache first (unless force refresh)
+  if (!forceRefresh) {
+    const cached = cacheStore.getChatSessions();
+    const isStale = cacheStore.isChatSessionsStale();
+    
+    // Return cached data immediately if available
+    if (cached) {
+      // If stale, trigger background refresh but return cached data
+      if (isStale && !cacheStore.isLoadingChats) {
+        // Background refresh (fire and forget)
+        refreshChatSessionsInBackground();
+      }
+      
+      // Convert cached data back to proper types
+      return {
+        today: cached.today.map(convertCachedSession),
+        yesterday: cached.yesterday.map(convertCachedSession),
+        lastWeek: cached.lastWeek.map(convertCachedSession),
+        lastMonth: cached.lastMonth.map(convertCachedSession),
+        older: cached.older.map(convertCachedSession),
+      };
+    }
+  }
+  
+  // Fetch fresh data
+  cacheStore.setLoadingChats(true);
+  
+  try {
+    const sessions = await getAllChatSessions();
+    const grouped = groupSessionsByDate(sessions);
+    
+    // Cache the grouped sessions (convert dates to strings for storage)
+    const cacheableGrouped = {
+      today: grouped.today.map(sessionToCacheable),
+      yesterday: grouped.yesterday.map(sessionToCacheable),
+      lastWeek: grouped.lastWeek.map(sessionToCacheable),
+      lastMonth: grouped.lastMonth.map(sessionToCacheable),
+      older: grouped.older.map(sessionToCacheable),
+    };
+    
+    cacheStore.setChatSessions(cacheableGrouped);
+    
+    return grouped;
+  } catch (error) {
+    console.error('Error fetching grouped chat sessions:', error);
+    cacheStore.setLoadingChats(false);
+    return { today: [], yesterday: [], lastWeek: [], lastMonth: [], older: [] };
+  }
+};
+
+// Helper to convert session to cacheable format
+const sessionToCacheable = (session: ChatSession) => ({
+  id: session.id,
+  title: session.title,
+  createdAt: session.createdAt.toISOString(),
+  updatedAt: session.updatedAt.toISOString(),
+  messageCount: session.messageCount,
+});
+
+// Helper to convert cached session back to proper types
+const convertCachedSession = (cached: any): ChatSession => ({
+  id: cached.id,
+  title: cached.title,
+  createdAt: new Date(cached.createdAt),
+  updatedAt: new Date(cached.updatedAt),
+  messages: [],
+  messageCount: cached.messageCount,
+});
+
+// Background refresh function
+const refreshChatSessionsInBackground = async () => {
+  const cacheStore = useCacheStore.getState();
+  
+  if (cacheStore.isLoadingChats) return;
+  
+  cacheStore.setLoadingChats(true);
+  
+  try {
+    const sessions = await getAllChatSessions();
+    const grouped = groupSessionsByDate(sessions);
+    
+    const cacheableGrouped = {
+      today: grouped.today.map(sessionToCacheable),
+      yesterday: grouped.yesterday.map(sessionToCacheable),
+      lastWeek: grouped.lastWeek.map(sessionToCacheable),
+      lastMonth: grouped.lastMonth.map(sessionToCacheable),
+      older: grouped.older.map(sessionToCacheable),
+    };
+    
+    cacheStore.setChatSessions(cacheableGrouped);
+  } catch (error) {
+    console.error('Background chat refresh failed:', error);
+    cacheStore.setLoadingChats(false);
+  }
+};
+
+/**
+ * Get a specific chat session with caching
+ */
+export const getChatSessionCached = async (chatId: string, forceRefresh: boolean = false): Promise<ChatSession | null> => {
+  const cacheStore = useCacheStore.getState();
+  
+  // Check cache first
+  if (!forceRefresh) {
+    const cached = cacheStore.getChatSessionDetail(chatId);
+    const isStale = cacheStore.isChatSessionDetailStale(chatId);
+    
+    if (cached && !isStale) {
+      return {
+        ...cached,
+        createdAt: new Date(cached.createdAt),
+        updatedAt: new Date(cached.updatedAt),
+        messages: cached.messages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp),
+        })),
+      };
+    }
+  }
+  
+  // Fetch fresh data
+  const session = await getChatSession(chatId);
+  
+  if (session) {
+    // Cache the session
+    cacheStore.setChatSessionDetail(chatId, {
+      ...session,
+      createdAt: session.createdAt.toISOString(),
+      updatedAt: session.updatedAt.toISOString(),
+      messages: session.messages.map(msg => ({
+        ...msg,
+        timestamp: msg.timestamp.toISOString(),
+      })),
+    });
+  }
+  
+  return session;
+};
+
+/**
+ * Invalidate chat cache (call after mutations)
+ */
+export const invalidateChatCache = () => {
+  const cacheStore = useCacheStore.getState();
+  cacheStore.invalidateChatSessions();
+};
+
+/**
+ * Invalidate specific chat session cache
+ */
+export const invalidateChatSessionCache = (chatId: string) => {
+  const cacheStore = useCacheStore.getState();
+  cacheStore.invalidateChatSessionDetail(chatId);
 };
 
 /**

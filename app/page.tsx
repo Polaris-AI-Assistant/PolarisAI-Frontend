@@ -20,13 +20,78 @@ const syncAuthToCookies = () => {
   }
 };
 
+// Handle OAuth tokens from URL hash (for Google OAuth redirect)
+const handleOAuthTokensFromHash = async (): Promise<boolean> => {
+  if (typeof window === 'undefined') return false;
+  
+  const hash = window.location.hash;
+  if (!hash || !hash.includes('access_token')) return false;
+  
+  try {
+    const hashParams = new URLSearchParams(hash.substring(1));
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+    const expiresIn = hashParams.get('expires_in');
+    
+    if (!accessToken || !refreshToken) return false;
+    
+    console.log('OAuth tokens found in URL hash, processing...');
+    
+    // Store tokens in localStorage
+    localStorage.setItem('auth_token', accessToken);
+    localStorage.setItem('refresh_token', refreshToken);
+    
+    // Set cookies for middleware
+    const expiresInSeconds = expiresIn ? parseInt(expiresIn) : 60 * 60 * 24 * 30;
+    const cookieOptions = `path=/; max-age=${expiresInSeconds}; SameSite=Lax`;
+    document.cookie = `auth_token=${accessToken}; ${cookieOptions}`;
+    document.cookie = `refresh_token=${refreshToken}; ${cookieOptions}`;
+    
+    // Try to get user data
+    try {
+      const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/auth/user`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (userResponse.ok) {
+        const userData = await userResponse.json();
+        localStorage.setItem('user_data', JSON.stringify(userData.user));
+      }
+    } catch (err) {
+      console.error('Error fetching user data:', err);
+    }
+    
+    // Clear the hash from URL
+    window.history.replaceState(null, '', window.location.pathname);
+    
+    return true;
+  } catch (err) {
+    console.error('Error processing OAuth tokens:', err);
+    return false;
+  }
+};
+
 export default function Home() {
   const router = useRouter();
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    // Check authentication on client side
-    const checkAuth = () => {
+    // Check for OAuth tokens in URL hash first (Google OAuth redirect)
+    const checkAuthAndTokens = async () => {
+      // First, check if there are OAuth tokens in the URL hash
+      const hasOAuthTokens = await handleOAuthTokensFromHash();
+      
+      if (hasOAuthTokens) {
+        // OAuth login successful, redirect to dashboard
+        router.push('/dashboard');
+        return;
+      }
+      
+      // Otherwise, check if already authenticated
       if (isAuthenticated()) {
         // Sync auth tokens to cookies for middleware
         syncAuthToCookies();
@@ -36,7 +101,7 @@ export default function Home() {
       }
     };
     
-    checkAuth();
+    checkAuthAndTokens();
   }, [router]);         
 
   const handleSignIn = () => {

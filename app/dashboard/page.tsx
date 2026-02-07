@@ -19,7 +19,14 @@ import {
   deleteChatSession,
   getGroupedChatSessions,
   GroupedChats,
+  invalidateChatCache,
 } from '../../lib/chatHistory'
+import {
+  getAllConnectionStatusesCached,
+  invalidateConnectionCache,
+  updateConnectionStatusCache,
+} from '../../lib/cachedConnections'
+import { useCacheStore } from '../../lib/stores/cacheStore'
 
 function Dashboard() {
   const router = useRouter()
@@ -45,14 +52,30 @@ function Dashboard() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [processingStatus, setProcessingStatus] = useState<string>('')
   
-  // Chat history state
+  // Chat history state - initialize from cache for instant display
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
-  const [groupedChats, setGroupedChats] = useState<GroupedChats>({
-    today: [],
-    yesterday: [],
-    lastWeek: [],
-    lastMonth: [],
-    older: [],
+  const [groupedChats, setGroupedChats] = useState<GroupedChats>(() => {
+    // Try to load from cache synchronously on initial render
+    if (typeof window !== 'undefined') {
+      const cached = useCacheStore.getState().getChatSessions()
+      if (cached) {
+        // Convert cached data to proper format
+        return {
+          today: cached.today.map((c: any) => ({ ...c, createdAt: new Date(c.createdAt), updatedAt: new Date(c.updatedAt), messages: [] })),
+          yesterday: cached.yesterday.map((c: any) => ({ ...c, createdAt: new Date(c.createdAt), updatedAt: new Date(c.updatedAt), messages: [] })),
+          lastWeek: cached.lastWeek.map((c: any) => ({ ...c, createdAt: new Date(c.createdAt), updatedAt: new Date(c.updatedAt), messages: [] })),
+          lastMonth: cached.lastMonth.map((c: any) => ({ ...c, createdAt: new Date(c.createdAt), updatedAt: new Date(c.updatedAt), messages: [] })),
+          older: cached.older.map((c: any) => ({ ...c, createdAt: new Date(c.createdAt), updatedAt: new Date(c.updatedAt), messages: [] })),
+        }
+      }
+    }
+    return {
+      today: [],
+      yesterday: [],
+      lastWeek: [],
+      lastMonth: [],
+      older: [],
+    }
   })
 
   // Load chat history
@@ -61,11 +84,13 @@ function Dashboard() {
     setGroupedChats(grouped)
   }, [])
 
-  // Handle new chat - MainAgentContent handles the logic internally
-  // This is called from the sidebar but MainAgentContent will check if current chat is empty
+  // Handle new chat - creates a new chat session and resets MainAgentContent
   const handleNewChat = useCallback(async () => {
-    // Check if the current chat is empty (has no messages)
-    // If so, don't create a new session - just keep the current empty one
+    // First, always switch to MainAgent tab
+    setActiveTab('MainAgent')
+    
+    // Check if the current chat is empty (has no messages) based on groupedChats
+    // This helps avoid creating multiple empty sessions
     if (currentChatId) {
       const allChats = [
         ...groupedChats.today,
@@ -76,19 +101,24 @@ function Dashboard() {
       ]
       const currentChat = allChats.find(chat => chat.id === currentChatId)
       if (currentChat && currentChat.messageCount === 0) {
-        // Current chat is empty, just switch to MainAgent tab without creating new session
-        setActiveTab('MainAgent')
+        // Current chat is already empty, no need to create new session
+        // Just ensure we're on MainAgent tab (done above)
         return
       }
     }
     
-    // The actual logic is handled in MainAgentContent.handleNewChat
-    // This just triggers the component to handle new chat creation
-    const newSession = await createNewChatSession()
-    if (newSession) {
-      setCurrentChatId(newSession.id)
-      setActiveTab('MainAgent') // Switch to MainAgent tab after creating new chat
-      await loadChatHistory()
+    // Create a new chat session
+    try {
+      const newSession = await createNewChatSession()
+      if (newSession) {
+        // Set the new chat ID - this will trigger MainAgentContent to load the new session
+        setCurrentChatId(newSession.id)
+        // Invalidate cache and refresh chat history
+        invalidateChatCache()
+        await loadChatHistory()
+      }
+    } catch (error) {
+      console.error('Error creating new chat:', error)
     }
   }, [loadChatHistory, currentChatId, groupedChats])
 
@@ -102,6 +132,8 @@ function Dashboard() {
     if (confirm('Delete this chat?')) {
       const success = await deleteChatSession(chatIdToDelete)
       if (success) {
+        // Invalidate cache and refresh
+        invalidateChatCache()
         await loadChatHistory()
         if (chatIdToDelete === currentChatId) {
           await handleNewChat()
@@ -124,10 +156,78 @@ function Dashboard() {
     }
   }, [searchParams])
 
-  // Load chat history on mount
+  // Track if initial chat setup is done
+  const initialChatSetupDone = useRef(false)
+
+  // Load chat history on mount and create initial session if needed
   useEffect(() => {
-    loadChatHistory()
-  }, [loadChatHistory])
+    // Only run once
+    if (initialChatSetupDone.current) return
+    initialChatSetupDone.current = true
+
+    const initializeChatHistory = async () => {
+      // First, try to set currentChatId from already loaded state (from cache)
+      const cachedChats = [
+        ...groupedChats.today,
+        ...groupedChats.yesterday,
+        ...groupedChats.lastWeek,
+        ...groupedChats.lastMonth,
+        ...groupedChats.older,
+      ]
+      
+      // If we have cached chats, set the current chat ID immediately
+      if (cachedChats.length > 0 && !currentChatId) {
+        const chatWithMessages = cachedChats.find(chat => chat.messageCount > 0)
+        const emptyChat = cachedChats.find(chat => chat.messageCount === 0)
+        
+        if (chatWithMessages) {
+          setCurrentChatId(chatWithMessages.id)
+        } else if (emptyChat) {
+          setCurrentChatId(emptyChat.id)
+        }
+      }
+      
+      // Then fetch fresh data in background (will use cache if not stale)
+      const grouped = await getGroupedChatSessions()
+      setGroupedChats(grouped)
+      
+      // Check if there are any existing chats with messages
+      const allChats = [
+        ...grouped.today,
+        ...grouped.yesterday,
+        ...grouped.lastWeek,
+        ...grouped.lastMonth,
+        ...grouped.older,
+      ]
+      
+      // Only update currentChatId if it's not set or invalid
+      if (!currentChatId || !allChats.find(c => c.id === currentChatId)) {
+        const chatWithMessages = allChats.find(chat => chat.messageCount > 0)
+        const emptyChat = allChats.find(chat => chat.messageCount === 0)
+        
+        if (chatWithMessages) {
+          setCurrentChatId(chatWithMessages.id)
+        } else if (emptyChat) {
+          setCurrentChatId(emptyChat.id)
+        } else {
+          // No chats exist, create a new one
+          try {
+            const newSession = await createNewChatSession()
+            if (newSession) {
+              setCurrentChatId(newSession.id)
+              invalidateChatCache()
+              const updatedGrouped = await getGroupedChatSessions(true)
+              setGroupedChats(updatedGrouped)
+            }
+          } catch (error) {
+            console.error('Error creating initial chat session:', error)
+          }
+        }
+      }
+    }
+    
+    initializeChatHistory()
+  }, [])
 
   useEffect(() => {
     // Check authentication first
@@ -138,62 +238,55 @@ function Dashboard() {
 
     setUser(getStoredUser())
     
-    // Check Gmail and GitHub connection status on load
+    // Check connection statuses using cache
     const checkConnections = async () => {
       try {
-        // Gmail status
-        const gmailStatusResult = await checkGmailStatus()
-        setGmailStatus(gmailStatusResult)
-        console.log('Gmail status:', gmailStatusResult)
+        // First, try to load from cache for instant display
+        const cachedStatuses = useCacheStore.getState().getAllConnectionStatuses()
         
-        // If Gmail connected, also get stats
-        if (gmailStatusResult.connected) {
-          const gmailStatsResult = await getGmailStats()
-          setGmailStats(gmailStatsResult)
-          console.log('Gmail stats:', gmailStatsResult)
+        if (cachedStatuses) {
+          // Apply cached statuses immediately for instant UI
+          if (cachedStatuses.gmail) setGmailStatus(cachedStatuses.gmail)
+          if (cachedStatuses.github) setGithubStatus(cachedStatuses.github)
+          if (cachedStatuses.forms) setFormsStatus(cachedStatuses.forms)
+          if (cachedStatuses.sheets) setSheetsStatus(cachedStatuses.sheets)
+          if (cachedStatuses.docs) setDocsStatus(cachedStatuses.docs)
+          if (cachedStatuses.calendar) setCalendarStatus(cachedStatuses.calendar)
+          if (cachedStatuses.meet) setMeetStatus(cachedStatuses.meet)
+          if (cachedStatuses.microsoft) setMicrosoftStatus(cachedStatuses.microsoft)
+          console.log('[Cache] Applied cached connection statuses')
         }
-
-        // GitHub status
-        const githubStatusResult = await checkGitHubStatus()
-        setGithubStatus(githubStatusResult)
-        console.log('GitHub status:', githubStatusResult)
         
-        // If GitHub connected, also get stats
-        if (githubStatusResult.connected) {
-          const githubStatsResult = await getGitHubStats()
-          setGithubStats(githubStatsResult)
-          console.log('GitHub stats:', githubStatsResult)
+        // Then fetch fresh data (will use cache if not stale)
+        const statuses = await getAllConnectionStatusesCached()
+        
+        // Update state with fresh/validated data
+        if (statuses.gmail) {
+          setGmailStatus(statuses.gmail)
+          // If Gmail connected, also get stats
+          if (statuses.gmail.connected) {
+            const gmailStatsResult = await getGmailStats()
+            setGmailStats(gmailStatsResult)
+          }
         }
-
-        // Forms status
-        const formsStatusResult = await checkFormsStatus()
-        setFormsStatus(formsStatusResult)
-        console.log('Forms status:', formsStatusResult)
-
-        // Sheets status
-        const sheetsStatusResult = await checkSheetsStatus()
-        setSheetsStatus(sheetsStatusResult)
-        console.log('Sheets status:', sheetsStatusResult)
-
-        // Docs status
-        const docsStatusResult = await checkDocsStatus()
-        setDocsStatus(docsStatusResult)
-        console.log('Docs status:', docsStatusResult)
-
-        // Calendar status
-        const calendarStatusResult = await checkCalendarStatus()
-        setCalendarStatus(calendarStatusResult)
-        console.log('Calendar status:', calendarStatusResult)
-
-        // Meet status
-        const meetStatusResult = await checkMeetStatus()
-        setMeetStatus(meetStatusResult)
-        console.log('Meet status:', meetStatusResult)
-
-        // Microsoft 365 status
-        const microsoftStatusResult = await checkMicrosoftStatus()
-        setMicrosoftStatus(microsoftStatusResult)
-        console.log('Microsoft status:', microsoftStatusResult)
+        
+        if (statuses.github) {
+          setGithubStatus(statuses.github)
+          // If GitHub connected, also get stats
+          if (statuses.github.connected) {
+            const githubStatsResult = await getGitHubStats()
+            setGithubStats(githubStatsResult)
+          }
+        }
+        
+        if (statuses.forms) setFormsStatus(statuses.forms)
+        if (statuses.sheets) setSheetsStatus(statuses.sheets)
+        if (statuses.docs) setDocsStatus(statuses.docs)
+        if (statuses.calendar) setCalendarStatus(statuses.calendar)
+        if (statuses.meet) setMeetStatus(statuses.meet)
+        if (statuses.microsoft) setMicrosoftStatus(statuses.microsoft)
+        
+        console.log('[Cache] Connection statuses loaded')
       } catch (error) {
         console.error('Error checking connection status:', error)
       }
@@ -263,6 +356,8 @@ function Dashboard() {
         if (result.success) {
           setGmailStatus({ connected: false })
           setGmailStats(null)
+          // Update cache
+          updateConnectionStatusCache('gmail', { connected: false })
           alert('Gmail disconnected successfully')
         } else {
           alert(result.error || 'Failed to disconnect Gmail')
@@ -304,6 +399,8 @@ function Dashboard() {
         if (result.success) {
           setGithubStatus({ connected: false })
           setGithubStats(null)
+          // Update cache
+          updateConnectionStatusCache('github', { connected: false })
           alert('GitHub disconnected successfully')
         } else {
           alert(result.error || 'Failed to disconnect GitHub')
@@ -340,6 +437,8 @@ function Dashboard() {
         const result = await disconnectForms()
         if (result.success) {
           setFormsStatus({ connected: false })
+          // Update cache
+          updateConnectionStatusCache('forms', { connected: false })
           alert('Google Forms disconnected successfully')
         } else {
           alert(result.error || 'Failed to disconnect Google Forms')
@@ -879,7 +978,7 @@ function Dashboard() {
                 <span>Main Agent</span>
               </button>
             </li>
-            <li>
+            {/* <li>
               <a
                 href="/search"
                 className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors text-white hover:bg-[#404040] hover:text-white"
@@ -889,7 +988,7 @@ function Dashboard() {
                 </svg>
                 <span>Gmail Assistant</span>
               </a>
-            </li>
+            </li> */}
             {/* <li>
               <a
                 href="/github"
