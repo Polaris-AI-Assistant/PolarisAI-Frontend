@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { SettingsProvider } from "@/contexts/SettingsContext";
+import { SocketProvider } from "@/contexts/SocketContext";
 import SettingsModal from "@/components/settings/SettingsModal";
 
 export const metadata: Metadata = {
@@ -17,8 +18,10 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         <SettingsProvider>
-          {children}
-          <SettingsModal />
+          <SocketProvider>
+            {children}
+            <SettingsModal />
+          </SocketProvider>
         </SettingsProvider>
       </body>
     </html>

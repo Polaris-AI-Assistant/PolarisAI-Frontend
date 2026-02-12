@@ -49,15 +49,23 @@ import {
   GroupedChats,
   invalidateChatCache,
   invalidateChatSessionCache,
+  getTimelineEventsForMessages,
+  TimelineEventData,
 } from '../lib/chatHistory';
 import { addMemory } from '../lib/memory';
 import { getUserLocation, requiresLocation } from '../lib/geolocation';
 import { useLocationStore } from '../lib/stores/locationStore';
+import { getSupabaseClient, ChatMessageRow, rowToChatMessage } from '../lib/supabase';
 import { VercelV0Chat } from '@/components/ui/v0-ai-chat';
 import { ThinkingIndicator } from '@/components/ui/thinking-indicator';
+import { FileAttachment, FileAttachmentRef } from '@/components/ui/FileAttachment';
+import { FileMessage } from '@/components/ui/FileMessage';
+import { UploadedFile } from '@/lib/files';
 import { Calendar, FileText, ClipboardList, Github, Video, Check, X, Mail, AlertCircle, Brain } from 'lucide-react';
 import { MeetingCard } from '@/components/ui/meeting-card';
 import { FlightResultsInline, FlightData } from '@/components/ui/flight-results-card';
+import { TimelineContainer, TimelineEvent, TimelineEventType } from '@/components/Timeline';
+import { MarkdownContent } from '@/components/ui/MarkdownContent';
 
 // Helper function to format markdown-style text
 const formatMessageContent = (content: string) => {
@@ -752,11 +760,13 @@ const PreviewContentRenderer = ({ content, actionType, agentName }: { content: s
       header?: string; 
       fields: Array<{ label: string; value: string; isBody?: boolean }>;
       questions?: Array<{ number: string; text: string; options?: string[] }>;
+      description?: string;
     } = { fields: [] };
     
     let currentQuestion: { number: string; text: string; options?: string[] } | null = null;
     let bodyContent = '';
     let inBody = false;
+    let inQuestions = false;
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -768,9 +778,50 @@ const PreviewContentRenderer = ({ content, actionType, agentName }: { content: s
         continue;
       }
       
+      // Check for "Questions:" label - switch to questions mode
+      if (cleanLine.toLowerCase() === 'questions:' || cleanLine.toLowerCase().startsWith('questions:')) {
+        inBody = false;
+        inQuestions = true;
+        // Save body content as description before switching to questions
+        if (bodyContent.trim()) {
+          parsed.description = bodyContent.trim();
+          bodyContent = '';
+        }
+        continue;
+      }
+      
+      // Handle numbered questions (for forms) - check this BEFORE body content handling
+      const questionMatch = cleanLine.match(/^(\d+)\.\s*([📝📄🔘☑️📋⭐📅🕐❓]?\s*)(.+)$/);
+      if (questionMatch) {
+        // Found a question - switch to questions mode
+        inBody = false;
+        inQuestions = true;
+        // Save any accumulated body content as description
+        if (bodyContent.trim() && !parsed.description) {
+          parsed.description = bodyContent.trim();
+          bodyContent = '';
+        }
+        
+        if (currentQuestion) {
+          if (!parsed.questions) parsed.questions = [];
+          parsed.questions.push(currentQuestion);
+        }
+        currentQuestion = { number: questionMatch[1], text: questionMatch[3], options: [] };
+        continue;
+      }
+      
+      // Handle question options (bullet points)
+      if (currentQuestion && cleanLine.match(/^[•·]\s+(.+)$/)) {
+        const optionMatch = cleanLine.match(/^[•·]\s+(.+)$/);
+        if (optionMatch && currentQuestion.options) {
+          currentQuestion.options.push(optionMatch[1]);
+        }
+        continue;
+      }
+      
       // Check for field patterns like "**To:** value" or "To: value"
       const fieldMatch = cleanLine.match(/^([A-Za-z\s\/]+):\s*(.*)$/);
-      if (fieldMatch && !inBody) {
+      if (fieldMatch && !inBody && !inQuestions) {
         const [, label, value] = fieldMatch;
         const trimmedLabel = label.trim();
         
@@ -789,33 +840,13 @@ const PreviewContentRenderer = ({ content, actionType, agentName }: { content: s
         continue;
       }
       
-      // Handle body content
-      if (inBody) {
+      // Handle body content (but not if we're in questions mode)
+      if (inBody && !inQuestions) {
         // Skip AI generation notes
         if (cleanLine.includes('AI will') || cleanLine.startsWith('_')) {
           continue;
         }
         bodyContent += (bodyContent ? '\n' : '') + cleanLine;
-        continue;
-      }
-      
-      // Handle numbered questions (for forms)
-      const questionMatch = cleanLine.match(/^(\d+)\.\s*([📝📄🔘☑️📋⭐📅🕐❓]?\s*)(.+)$/);
-      if (questionMatch) {
-        if (currentQuestion) {
-          if (!parsed.questions) parsed.questions = [];
-          parsed.questions.push(currentQuestion);
-        }
-        currentQuestion = { number: questionMatch[1], text: questionMatch[3], options: [] };
-        continue;
-      }
-      
-      // Handle question options
-      if (currentQuestion && cleanLine.match(/^[•·]\s+(.+)$/)) {
-        const optionMatch = cleanLine.match(/^[•·]\s+(.+)$/);
-        if (optionMatch && currentQuestion.options) {
-          currentQuestion.options.push(optionMatch[1]);
-        }
         continue;
       }
     }
@@ -826,9 +857,89 @@ const PreviewContentRenderer = ({ content, actionType, agentName }: { content: s
       parsed.questions.push(currentQuestion);
     }
     
-    // Add body content if exists
-    if (bodyContent.trim()) {
+    // Add body content if exists and wasn't converted to description
+    if (bodyContent.trim() && !parsed.description) {
       parsed.fields.push({ label: 'Content', value: bodyContent.trim(), isBody: true });
+    }
+    
+    // Also try to parse questions from inline content (e.g., "1. 📄 Full Name *(required)* 2. 📄 Email")
+    // This handles cases where questions are in a single line or concatenated together
+    if (!parsed.questions || parsed.questions.length === 0) {
+      const fullContent = content;
+      
+      // Extract description - text before "Questions:" or before first numbered item
+      const questionsLabelMatch = fullContent.match(/Questions:\s*/i);
+      let contentToParseQuestions = fullContent;
+      
+      if (questionsLabelMatch) {
+        const descEnd = fullContent.indexOf(questionsLabelMatch[0]);
+        if (descEnd > 0) {
+          let descText = fullContent.substring(0, descEnd).trim();
+          // Clean up description - remove field labels (handles both start of line and inline)
+          descText = descText.replace(/\*?\*?(Title|Description)\*?\*?:\s*/gi, '').trim();
+          if (descText) {
+            parsed.description = descText;
+          }
+        }
+        // Get content after "Questions:"
+        contentToParseQuestions = fullContent.substring(fullContent.indexOf(questionsLabelMatch[0]) + questionsLabelMatch[0].length);
+      } else {
+        // No "Questions:" label - check if content starts with description before first question
+        const firstQuestionMatch = contentToParseQuestions.match(/\d+\.\s*[📝📄🔘☑️📋⭐📅🕐❓]/);
+        if (firstQuestionMatch) {
+          const firstQIndex = contentToParseQuestions.indexOf(firstQuestionMatch[0]);
+          if (firstQIndex > 0) {
+            let descText = contentToParseQuestions.substring(0, firstQIndex).trim();
+            // Clean up description - remove field labels
+            descText = descText.replace(/\*?\*?(Title|Description)\*?\*?:\s*/gi, '').trim();
+            if (descText) {
+              parsed.description = descText;
+            }
+          }
+        }
+      }
+      
+      // Split by question number pattern - split before each "N. " where N is a digit
+      const questionSegments = contentToParseQuestions.split(/(?=\d+\.\s+)/);
+      const inlineQuestions: Array<{ number: string; text: string; options: string[] }> = [];
+      
+      for (const segment of questionSegments) {
+        const trimmedSegment = segment.trim();
+        if (!trimmedSegment) continue;
+        
+        // Match question number and content
+        const questionMatch = trimmedSegment.match(/^(\d+)\.\s*(.+)/s);
+        if (!questionMatch) continue;
+        
+        const questionNumber = questionMatch[1];
+        let questionContent = questionMatch[2].trim();
+        
+        // Extract options (marked with •)
+        const options: string[] = [];
+        const optionParts = questionContent.split('•');
+        
+        // First part is the question text, rest are options
+        let questionText = optionParts[0].trim();
+        
+        for (let i = 1; i < optionParts.length; i++) {
+          const opt = optionParts[i].trim();
+          if (opt) {
+            options.push(opt);
+          }
+        }
+        
+        if (questionText) {
+          inlineQuestions.push({
+            number: questionNumber,
+            text: questionText,
+            options: options
+          });
+        }
+      }
+      
+      if (inlineQuestions.length > 0) {
+        parsed.questions = inlineQuestions;
+      }
     }
     
     return parsed;
@@ -899,6 +1010,164 @@ const PreviewContentRenderer = ({ content, actionType, agentName }: { content: s
             <div className="text-white/80 text-sm whitespace-pre-wrap leading-relaxed bg-white/[0.02] rounded-xl p-4 border border-white/[0.06]">
               {actualBodyField.value}
             </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Special handling for create_form action type - beautiful form preview
+  if (actionType === 'create_form') {
+    const titleField = parsed.fields.find(f => f.label.toLowerCase() === 'title');
+    const descriptionField = parsed.fields.find(f => f.label.toLowerCase() === 'description');
+    // Use parsed.description if available (extracted before questions)
+    // Only fall back to descriptionField if we don't have parsed questions (to avoid showing raw content with questions mixed in)
+    const formDescription = parsed.description || 
+      (parsed.questions && parsed.questions.length > 0 ? undefined : descriptionField?.value || parsed.fields.find(f => f.isBody)?.value);
+    
+    return (
+      <div className="space-y-4">
+        {/* Form Header with Google Forms branding */}
+        <div className="flex items-center gap-4 pb-4 border-b border-white/[0.06]">
+          <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/20 flex items-center justify-center">
+            <ClipboardList className="w-5 h-5 text-purple-400" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-white font-semibold text-lg leading-tight">
+              {titleField?.value || 'Untitled Form'}
+            </h3>
+            <span className="text-xs text-purple-400/80">Google Form</span>
+          </div>
+          <span className="text-xs text-white/50 bg-white/[0.04] border border-white/[0.06] px-2.5 py-1 rounded-lg font-mono">createForm</span>
+        </div>
+        
+        {/* Form Description */}
+        {formDescription && (
+          <div className="bg-white/[0.02] rounded-xl p-4 border border-white/[0.06]">
+            <p className="text-white/60 text-sm leading-relaxed">
+              {formDescription}
+            </p>
+          </div>
+        )}
+        
+        {/* Questions Section */}
+        {parsed.questions && parsed.questions.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 pt-2">
+              <span className="text-white/50 text-xs uppercase tracking-wider font-medium">Questions</span>
+              <span className="text-white/30 text-xs">({parsed.questions.length})</span>
+            </div>
+            
+            {/* Individual Question Cards */}
+            <div className="space-y-3">
+              {parsed.questions.map((q, idx) => {
+                // Determine question type from emoji/text
+                const isRequired = q.text.includes('*(required)*') || q.text.includes('*');
+                const questionText = q.text.replace(/\*\(required\)\*/g, '').replace(/\*$/g, '').trim();
+                
+                // Detect question type from emoji
+                let questionType = 'text';
+                let typeIcon = '📝';
+                if (q.text.includes('📋') || (q.options && q.options.length > 0 && !q.text.includes('☑️'))) {
+                  questionType = 'multiple_choice';
+                  typeIcon = '🔘';
+                } else if (q.text.includes('☑️')) {
+                  questionType = 'checkbox';
+                  typeIcon = '☑️';
+                } else if (q.text.includes('⭐')) {
+                  questionType = 'scale';
+                  typeIcon = '⭐';
+                } else if (q.text.includes('📝') || q.text.includes('📄')) {
+                  questionType = 'text';
+                  typeIcon = '📝';
+                }
+                
+                return (
+                  <div 
+                    key={idx} 
+                    className="bg-gradient-to-br from-white/[0.03] to-white/[0.01] rounded-xl border border-white/[0.08] overflow-hidden hover:border-white/[0.12] transition-all duration-200"
+                  >
+                    {/* Question Header */}
+                    <div className="px-4 py-3 border-b border-white/[0.05]">
+                      <div className="flex items-start gap-3">
+                        {/* Question Number Badge */}
+                        <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
+                          <span className="text-purple-300 font-semibold text-sm">{q.number}</span>
+                        </div>
+                        
+                        {/* Question Text */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-medium text-sm leading-relaxed">
+                            {questionText.replace(/^[📝📄🔘☑️📋⭐📅🕐❓]\s*/, '')}
+                            {isRequired && (
+                              <span className="text-red-400 ml-1">*</span>
+                            )}
+                          </p>
+                          
+                          {/* Question Type Badge */}
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className="text-[10px] text-white/40 bg-white/[0.05] px-2 py-0.5 rounded-full capitalize">
+                              {typeIcon} {questionType.replace('_', ' ')}
+                            </span>
+                            {isRequired && (
+                              <span className="text-[10px] text-red-400/80 bg-red-500/10 px-2 py-0.5 rounded-full">
+                                Required
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Options (if any) */}
+                    {q.options && q.options.length > 0 && (
+                      <div className="px-4 py-3 bg-white/[0.01]">
+                        <div className="space-y-2 pl-10">
+                          {q.options.map((opt, optIdx) => (
+                            <div 
+                              key={optIdx} 
+                              className="flex items-center gap-3 group"
+                            >
+                              {/* Option Radio/Checkbox indicator */}
+                              <div className={`flex-shrink-0 ${
+                                questionType === 'checkbox' 
+                                  ? 'w-4 h-4 rounded-[3px] border-2 border-white/20' 
+                                  : 'w-4 h-4 rounded-full border-2 border-white/20'
+                              }`} />
+                              
+                              {/* Option Text */}
+                              <span className="text-white/60 text-sm group-hover:text-white/80 transition-colors">
+                                {opt}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        
+        {/* Other fields that aren't title/description */}
+        {parsed.fields.filter(f => 
+          f.label.toLowerCase() !== 'title' && 
+          f.label.toLowerCase() !== 'description' && 
+          !f.isBody
+        ).length > 0 && (
+          <div className="pt-3 border-t border-white/[0.06] space-y-2">
+            {parsed.fields.filter(f => 
+              f.label.toLowerCase() !== 'title' && 
+              f.label.toLowerCase() !== 'description' && 
+              !f.isBody
+            ).map((field, idx) => (
+              <div key={idx} className="flex items-start gap-3">
+                <span className="text-white/40 text-xs min-w-[80px] flex-shrink-0">{field.label}:</span>
+                <span className="text-white/70 text-sm">{field.value}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -1095,12 +1364,24 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     lastMonth: [],
     older: [],
   });
+  // File attachment state
+  const [attachedFiles, setAttachedFiles] = useState<UploadedFile[]>([]);
+  const [showFileUpload, setShowFileUpload] = useState(false);
+  const fileAttachmentRef = useRef<FileAttachmentRef>(null);
+  
   // Confirmation flow state
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationRequest | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   // Memory state - track which message pairs have been saved to memory
   const [savedToMemory, setSavedToMemory] = useState<Set<string>>(new Set());
   const [savingToMemory, setSavingToMemory] = useState<string | null>(null);
+  // Timeline state - track execution progress
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  const [showTimeline, setShowTimeline] = useState(true);
+  // Track which message ID the current timeline belongs to
+  const [timelineMessageId, setTimelineMessageId] = useState<string | null>(null);
+  // Store persisted timeline events per message (for viewing historical timelines)
+  const [messageTimelines, setMessageTimelines] = useState<Record<string, TimelineEvent[]>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const streamingContentRef = useRef<string>('');
@@ -1171,6 +1452,76 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     }
   }, [chatId]);
 
+  // Realtime subscription for messages - updates UI instantly when messages are inserted/updated
+  useEffect(() => {
+    if (!currentChatId) return;
+
+    const supabase = getSupabaseClient();
+    const channelName = `chat-messages-${currentChatId}`;
+
+    console.log('[Realtime] Setting up message subscription for chat:', currentChatId);
+
+    const channel = supabase
+      .channel(channelName)
+      // Listen for new messages
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `chat_session_id=eq.${currentChatId}`,
+        },
+        (payload) => {
+          const newRow = payload.new as ChatMessageRow;
+          console.log('[Realtime] Message INSERT received:', newRow.id);
+
+          // Only add if not already in messages (avoid duplicates from local state)
+          setMessages((prev) => {
+            const exists = prev.some((m) => m.id === newRow.id);
+            if (exists) {
+              console.log('[Realtime] Message already exists, skipping');
+              return prev;
+            }
+
+            const newMessage = rowToChatMessage(newRow);
+            console.log('[Realtime] Adding new message to UI');
+            return [...prev, newMessage];
+          });
+        }
+      )
+      // Listen for message updates (e.g., AI response streaming completion)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `chat_session_id=eq.${currentChatId}`,
+        },
+        (payload) => {
+          const updatedRow = payload.new as ChatMessageRow;
+          console.log('[Realtime] Message UPDATE received:', updatedRow.id);
+
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === updatedRow.id 
+                ? { ...rowToChatMessage(updatedRow), files: m.files }  // Preserve files on update
+                : m
+            )
+          );
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Realtime] Message subscription status:', status);
+      });
+
+    return () => {
+      console.log('[Realtime] Cleaning up message subscription for chat:', currentChatId);
+      supabase.removeChannel(channel);
+    };
+  }, [currentChatId]);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages, isThinking]);
@@ -1205,8 +1556,8 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     }
   };
 
-  const loadChatHistory = async () => {
-    const grouped = await getGroupedChatSessions();
+  const loadChatHistory = async (forceRefresh: boolean = false) => {
+    const grouped = await getGroupedChatSessions(forceRefresh);
     setGroupedChats(grouped);
   };
 
@@ -1243,9 +1594,64 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       const session = await getChatSessionCached(chatIdToLoad);
       if (session) {
         setCurrentChatId(session.id);
-        setMessages(session.messages || []);
-        setShowExamples(!session.messages || session.messages.length === 0);
+        
+        // Sort messages by sequence_order (if available) or timestamp for correct order
+        const sortedMessages = [...(session.messages || [])].sort((a, b) => {
+          // Use sequence order if both have it
+          if (a.sequenceOrder != null && b.sequenceOrder != null) {
+            return a.sequenceOrder - b.sequenceOrder;
+          }
+          // Fall back to timestamp
+          const timeA = new Date(a.timestamp || 0).getTime();
+          const timeB = new Date(b.timestamp || 0).getTime();
+          return timeA - timeB;
+        });
+        
+        setMessages(sortedMessages);
+        setShowExamples(!sortedMessages || sortedMessages.length === 0);
         onChatIdChange?.(session.id);
+        
+        // Fetch timeline events for assistant messages
+        const assistantMessages = sortedMessages
+          .filter(m => m.role === 'assistant');
+        const assistantMessageIds = assistantMessages.map(m => m.id);
+        
+        if (assistantMessageIds.length > 0) {
+          try {
+            const timelinesData = await getTimelineEventsForMessages(assistantMessageIds);
+            // Convert to TimelineEvent format and store - KEEP EACH MESSAGE'S TIMELINE SEPARATE
+            const timelinesMap: Record<string, TimelineEvent[]> = {};
+            
+            for (const [msgId, events] of Object.entries(timelinesData)) {
+              const convertedEvents = (events as TimelineEventData[]).map(e => ({
+                eventId: e.eventId || `stored-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+                type: e.type as TimelineEvent['type'],
+                timestamp: e.timestamp || new Date().toISOString(),
+                message: e.message,
+                agentName: e.agentName,
+                agentDisplayName: e.agentDisplayName,
+                agentIcon: e.agentIcon,
+                toolName: e.toolName,
+                toolDisplayName: e.toolDisplayName,
+                status: (e.status as 'completed' | 'in-progress' | 'failed' | 'pending') || 'completed',
+                icon: e.icon,
+                description: e.description,
+                data: e.data,
+                result: e.result,
+              }));
+              
+              // Store timeline for THIS message (not merged with others)
+              if (convertedEvents.length > 0) {
+                timelinesMap[msgId] = convertedEvents;
+              }
+            }
+            
+            // Set all message timelines (each message has its own timeline)
+            setMessageTimelines(timelinesMap);
+          } catch (error) {
+            console.error('Error fetching timeline events:', error);
+          }
+        }
       } else {
         // Session not found - this could be a newly created session that's not yet in the DB
         // or an invalid session ID. Just set empty state with this ID.
@@ -1254,6 +1660,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
         setMessages([]);
         setShowExamples(true);
         onChatIdChange?.(chatIdToLoad);
+        setMessageTimelines({});
       }
     } catch (error) {
       console.error('Error loading chat session:', error);
@@ -1261,12 +1668,27 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       setCurrentChatId(chatIdToLoad);
       setMessages([]);
       setShowExamples(true);
+      setMessageTimelines({});
     }
   };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // File attachment handlers
+  const handleAttachFile = () => {
+    fileAttachmentRef.current?.triggerFileSelect();
+  };
+
+  const handleFileAttached = (file: UploadedFile) => {
+    setAttachedFiles(prev => [...prev, file]);
+  };
+
+  const handleFileRemoved = (fileId: string) => {
+    setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
+  };
+
   const handleSendMessage = async (queryText?: string) => {
     const query = queryText || input.trim();
     
@@ -1274,6 +1696,10 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
 
     setInput('');
     setShowExamples(false);
+
+    // Store attached files for this message
+    const messageFiles = [...attachedFiles];
+    setAttachedFiles([]); // Clear for next message
 
     // Check if query requires user location
     let userLocation: UserLocation | undefined = undefined;
@@ -1326,14 +1752,38 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       role: 'user',
       content: query,
       timestamp: new Date(),
+      // Attach file metadata for display in chat (not persisted to DB)
+      ...(messageFiles.length > 0 && {
+        files: messageFiles.map(f => ({
+          id: f.id,
+          filename: f.filename,
+          originalFilename: f.originalFilename,
+          mimeType: f.mimeType,
+          size: f.size,
+          url: f.url,
+          fileType: f.fileType,
+        }))
+      }),
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    
+    // IMMEDIATE INSERT: Save user message to DB right away (don't wait for AI response)
+    // This enables realtime to push the message to other clients instantly
+    if (currentChatId) {
+      // Fire and forget - don't await to avoid blocking UI
+      updateChatSession(currentChatId, [userMessage]).catch((err) => {
+        console.error('Error saving user message immediately:', err);
+      });
+    }
+    
     setIsLoading(true);
     setIsThinking(true);
     setThinkingMessage('Thinking...');
+    setTimelineEvents([]); // Reset timeline for new query
     
     const assistantMessageId = (Date.now() + 1).toString();
+    setTimelineMessageId(assistantMessageId); // Associate timeline with this message
     setStreamingMessageId(assistantMessageId);
     streamingContentRef.current = '';
     metadataRef.current = {};
@@ -1358,6 +1808,9 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
           content: query,
         }
       ];
+
+      // Extract file IDs from attached files
+      const fileIds = messageFiles.map(f => f.id);
 
       // Pass currentChatId as conversationId for artifact memory and userLocation for Maps
       await processQueryStreaming(
@@ -1504,6 +1957,207 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
               chainInfo: chunk.chainInfo,
             });
             break;
+          
+          // Timeline event handlers - update status for completion/failure events
+          case 'timeline_agent_completed':
+          case 'timeline_agent_failed':
+            // Update existing executing event for this agent instead of adding new
+            setTimelineEvents((prev) => {
+              // Determine status from backend or infer from type
+              const eventStatus = chunk.status || (chunk.type === 'timeline_agent_completed' ? 'completed' : 'failed');
+              
+              // Find the executing event for this agent
+              const executingIndex = prev.findIndex(
+                e => e.type === 'timeline_agent_executing' && e.agentName === chunk.agentName
+              );
+              if (executingIndex >= 0) {
+                // Update the existing event's type and status
+                const updated = [...prev];
+                updated[executingIndex] = {
+                  ...updated[executingIndex],
+                  type: chunk.type as TimelineEvent['type'],
+                  status: eventStatus as TimelineEvent['status'],
+                  result: chunk.result,
+                  message: chunk.needsClarification ? 'Awaiting clarification' : chunk.message,
+                  needsClarification: chunk.needsClarification,
+                };
+                return updated;
+              }
+              // If no executing event found, add as new
+              return [...prev, {
+                eventId: chunk.eventId || `event-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+                type: chunk.type as TimelineEvent['type'],
+                timestamp: chunk.timestamp || new Date().toISOString(),
+                message: chunk.needsClarification ? 'Awaiting clarification' : chunk.message,
+                agentName: chunk.agentName,
+                agentDisplayName: chunk.agentDisplayName,
+                status: eventStatus as TimelineEvent['status'],
+                needsClarification: chunk.needsClarification,
+              }];
+            });
+            break;
+          
+          case 'timeline_tool_completed':
+          case 'timeline_tool_failed':
+            // Update existing tool_started event instead of adding new
+            setTimelineEvents((prev) => {
+              const startedIndex = prev.findIndex(
+                e => e.type === 'timeline_tool_started' && e.toolName === chunk.toolName && e.agentName === chunk.agentName
+              );
+              if (startedIndex >= 0) {
+                const updated = [...prev];
+                updated[startedIndex] = {
+                  ...updated[startedIndex],
+                  type: chunk.type as TimelineEvent['type'],
+                  status: chunk.type === 'timeline_tool_completed' ? 'completed' : 'failed',
+                  result: chunk.result,
+                };
+                return updated;
+              }
+              return prev; // Don't add if no matching started event
+            });
+            break;
+          
+          // Update-in-place events for processing phases
+          case 'timeline_memory_retrieved':
+            setTimelineEvents((prev) => {
+              const searchingIndex = prev.findIndex(e => e.type === 'timeline_memory_searching');
+              if (searchingIndex >= 0) {
+                const updated = [...prev];
+                updated[searchingIndex] = {
+                  ...updated[searchingIndex],
+                  type: 'timeline_memory_retrieved',
+                  status: 'completed',
+                  message: chunk.message,
+                };
+                return updated;
+              }
+              return [...prev, {
+                eventId: chunk.eventId || `event-${Date.now()}`,
+                type: 'timeline_memory_retrieved' as TimelineEventType,
+                timestamp: chunk.timestamp || new Date().toISOString(),
+                message: chunk.message,
+                status: 'completed',
+              }];
+            });
+            break;
+          
+          case 'timeline_artifact_resolved':
+            setTimelineEvents((prev) => {
+              const scanningIndex = prev.findIndex(e => e.type === 'timeline_artifact_scanning');
+              if (scanningIndex >= 0) {
+                const updated = [...prev];
+                updated[scanningIndex] = {
+                  ...updated[scanningIndex],
+                  type: 'timeline_artifact_resolved',
+                  status: 'completed',
+                  message: chunk.message,
+                };
+                return updated;
+              }
+              return [...prev, {
+                eventId: chunk.eventId || `event-${Date.now()}`,
+                type: 'timeline_artifact_resolved' as TimelineEventType,
+                timestamp: chunk.timestamp || new Date().toISOString(),
+                message: chunk.message,
+                status: 'completed',
+              }];
+            });
+            break;
+          
+          case 'timeline_analysis_complete':
+            setTimelineEvents((prev) => {
+              const analyzingIndex = prev.findIndex(e => e.type === 'timeline_analyzing_query');
+              if (analyzingIndex >= 0) {
+                const updated = [...prev];
+                updated[analyzingIndex] = {
+                  ...updated[analyzingIndex],
+                  type: 'timeline_analysis_complete',
+                  status: 'completed',
+                  message: chunk.message,
+                };
+                return updated;
+              }
+              return [...prev, {
+                eventId: chunk.eventId || `event-${Date.now()}`,
+                type: 'timeline_analysis_complete' as TimelineEventType,
+                timestamp: chunk.timestamp || new Date().toISOString(),
+                message: chunk.message,
+                status: 'completed',
+              }];
+            });
+            break;
+          
+          // Task completed - update ALL generating_response events to completed
+          case 'timeline_task_completed':
+            setTimelineEvents((prev) => {
+              // Determine status from backend
+              const taskStatus = (chunk.status || 'completed') as TimelineEvent['status'];
+              const taskMessage = taskStatus === 'needs_input' 
+                ? 'Awaiting your response' 
+                : (chunk.message || chunk.summary || 'Request completed successfully');
+              
+              // Find all generating_response events that need to be updated
+              const hasGeneratingResponse = prev.some(e => e.type === 'timeline_generating_response');
+              if (hasGeneratingResponse) {
+                // Update all generating_response events to completed
+                return prev.map(e => 
+                  e.type === 'timeline_generating_response' 
+                    ? {
+                        ...e,
+                        type: 'timeline_task_completed' as TimelineEventType,
+                        status: taskStatus,
+                        message: taskMessage,
+                      }
+                    : e
+                );
+              }
+              // If no generating_response found, add as new event
+              return [...prev, {
+                eventId: chunk.eventId || `event-${Date.now()}`,
+                type: 'timeline_task_completed' as TimelineEventType,
+                timestamp: chunk.timestamp || new Date().toISOString(),
+                message: taskMessage,
+                status: taskStatus,
+              }];
+            });
+            break;
+          
+          case 'timeline_plan':
+          case 'timeline_agent_added':
+          case 'timeline_agent_executing':
+          case 'timeline_narrative':
+          case 'timeline_tool_started':
+          case 'timeline_confirmation_required':
+          case 'timeline_confirmation_received':
+          case 'timeline_memory_searching':
+          case 'timeline_memory_stored':
+          case 'timeline_artifact_scanning':
+          case 'timeline_analyzing_query':
+          case 'timeline_generating_response':
+          case 'timeline_task_failed':
+            // Add the timeline event to state
+            const timelineEvent: TimelineEvent = {
+              eventId: chunk.eventId || `event-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+              type: chunk.type,
+              timestamp: chunk.timestamp || new Date().toISOString(),
+              message: chunk.message,
+              agentName: chunk.agentName,
+              agentIcon: chunk.agentIcon,
+              agentDisplayName: chunk.agentDisplayName,
+              toolName: chunk.toolName,
+              toolDisplayName: chunk.toolDisplayName,
+              query: chunk.query,
+              result: chunk.result,
+              data: chunk.data,
+              summary: chunk.summary,
+              status: (chunk.type === 'timeline_agent_executing' || chunk.type === 'timeline_tool_started' 
+                || chunk.type === 'timeline_memory_searching' || chunk.type === 'timeline_artifact_scanning'
+                || chunk.type === 'timeline_analyzing_query' || chunk.type === 'timeline_generating_response') 
+                ? 'in-progress' : (chunk.status as 'completed' | 'in-progress' | 'failed' | 'pending' || 'completed'),
+            };
+            setTimelineEvents((prev) => [...prev, timelineEvent]);
+            break;
             
           case 'error':
             throw new Error(chunk.error || chunk.message || 'Unknown error');
@@ -1511,6 +2165,12 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
           case 'done':
             const finalContent = streamingContentRef.current;
             const finalMetadata = { ...metadataRef.current };
+            
+            // Store timeline events for this message in local state for future viewing
+            setMessageTimelines((prev) => ({
+              ...prev,
+              [assistantMessageId]: [...timelineEvents],
+            }));
             
             setMessages((prev) => {
               const updatedMessages = prev.map((m) => {
@@ -1543,7 +2203,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             });
             break;
         }
-      }, currentChatId || undefined, userLocation);  // Pass currentChatId for artifact memory and userLocation for Maps
+      }, currentChatId || undefined, userLocation, assistantMessageId, fileIds, userMessage.id);  // Pass currentChatId for artifact memory, userLocation for Maps, messageId for timeline storage, fileIds for file context, userMessageId for file persistence
 
     } catch (error: any) {
       if (error.message && (error.message.includes('Session expired') || error.message.includes('Authentication required'))) {
@@ -1633,6 +2293,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     let receivedNewConfirmation = false;
 
     try {
+      // Pass messageId and chatId for timeline storage at chain completion
       await confirmActionStreaming(pendingConfirmation.requestId, (chunk: StreamChunk) => {
         switch (chunk.type) {
           case 'thinking':
@@ -1750,6 +2411,177 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             setIsConfirming(false);
             streamingContentRef.current = '';
             break;
+          
+          // Timeline event handlers for confirmation flow - update status for completion/failure events
+          case 'timeline_agent_completed':
+          case 'timeline_agent_failed':
+            // Update existing executing event for this agent instead of adding new
+            setTimelineEvents((prev) => {
+              // Determine status from backend or infer from type
+              const eventStatus = chunk.status || (chunk.type === 'timeline_agent_completed' ? 'completed' : 'failed');
+              
+              const executingIndex = prev.findIndex(
+                e => e.type === 'timeline_agent_executing' && e.agentName === chunk.agentName
+              );
+              if (executingIndex >= 0) {
+                const updated = [...prev];
+                updated[executingIndex] = {
+                  ...updated[executingIndex],
+                  type: chunk.type as TimelineEvent['type'],
+                  status: eventStatus as TimelineEvent['status'],
+                  result: chunk.result,
+                  message: chunk.needsClarification ? 'Awaiting clarification' : chunk.message,
+                  needsClarification: chunk.needsClarification,
+                };
+                return updated;
+              }
+              return [...prev, {
+                eventId: chunk.eventId || `event-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+                type: chunk.type as TimelineEvent['type'],
+                timestamp: chunk.timestamp || new Date().toISOString(),
+                message: chunk.needsClarification ? 'Awaiting clarification' : chunk.message,
+                agentName: chunk.agentName,
+                agentDisplayName: chunk.agentDisplayName,
+                status: eventStatus as TimelineEvent['status'],
+                needsClarification: chunk.needsClarification,
+              }];
+            });
+            break;
+          
+          case 'timeline_tool_completed':
+          case 'timeline_tool_failed':
+            setTimelineEvents((prev) => {
+              const startedIndex = prev.findIndex(
+                e => e.type === 'timeline_tool_started' && e.toolName === chunk.toolName && e.agentName === chunk.agentName
+              );
+              if (startedIndex >= 0) {
+                const updated = [...prev];
+                updated[startedIndex] = {
+                  ...updated[startedIndex],
+                  type: chunk.type as TimelineEvent['type'],
+                  status: chunk.type === 'timeline_tool_completed' ? 'completed' : 'failed',
+                  result: chunk.result,
+                };
+                return updated;
+              }
+              return prev;
+            });
+            break;
+          
+          // Update-in-place events for processing phases (confirmation flow)
+          case 'timeline_memory_retrieved':
+            setTimelineEvents((prev) => {
+              const searchingIndex = prev.findIndex(e => e.type === 'timeline_memory_searching');
+              if (searchingIndex >= 0) {
+                const updated = [...prev];
+                updated[searchingIndex] = {
+                  ...updated[searchingIndex],
+                  type: 'timeline_memory_retrieved',
+                  status: 'completed',
+                  message: chunk.message,
+                };
+                return updated;
+              }
+              return [...prev, { eventId: chunk.eventId || `event-${Date.now()}`, type: 'timeline_memory_retrieved' as TimelineEventType, timestamp: chunk.timestamp || new Date().toISOString(), message: chunk.message, status: 'completed' }];
+            });
+            break;
+          
+          case 'timeline_artifact_resolved':
+            setTimelineEvents((prev) => {
+              const scanningIndex = prev.findIndex(e => e.type === 'timeline_artifact_scanning');
+              if (scanningIndex >= 0) {
+                const updated = [...prev];
+                updated[scanningIndex] = {
+                  ...updated[scanningIndex],
+                  type: 'timeline_artifact_resolved',
+                  status: 'completed',
+                  message: chunk.message,
+                };
+                return updated;
+              }
+              return [...prev, { eventId: chunk.eventId || `event-${Date.now()}`, type: 'timeline_artifact_resolved' as TimelineEventType, timestamp: chunk.timestamp || new Date().toISOString(), message: chunk.message, status: 'completed' }];
+            });
+            break;
+          
+          case 'timeline_analysis_complete':
+            setTimelineEvents((prev) => {
+              const analyzingIndex = prev.findIndex(e => e.type === 'timeline_analyzing_query');
+              if (analyzingIndex >= 0) {
+                const updated = [...prev];
+                updated[analyzingIndex] = {
+                  ...updated[analyzingIndex],
+                  type: 'timeline_analysis_complete',
+                  status: 'completed',
+                  message: chunk.message,
+                };
+                return updated;
+              }
+              return [...prev, { eventId: chunk.eventId || `event-${Date.now()}`, type: 'timeline_analysis_complete' as TimelineEventType, timestamp: chunk.timestamp || new Date().toISOString(), message: chunk.message, status: 'completed' }];
+            });
+            break;
+          
+          // Task completed - update ALL generating_response events to completed (confirmation flow)
+          case 'timeline_task_completed':
+            setTimelineEvents((prev) => {
+              // Determine status from backend
+              const taskStatus = (chunk.status || 'completed') as TimelineEvent['status'];
+              const taskMessage = taskStatus === 'needs_input' 
+                ? 'Awaiting your response' 
+                : (chunk.message || chunk.summary || 'Request completed successfully');
+              
+              // Find all generating_response events that need to be updated
+              const hasGeneratingResponse = prev.some(e => e.type === 'timeline_generating_response');
+              if (hasGeneratingResponse) {
+                // Update all generating_response events to completed
+                return prev.map(e => 
+                  e.type === 'timeline_generating_response' 
+                    ? {
+                        ...e,
+                        type: 'timeline_task_completed' as TimelineEventType,
+                        status: taskStatus,
+                        message: taskMessage,
+                      }
+                    : e
+                );
+              }
+              return [...prev, { eventId: chunk.eventId || `event-${Date.now()}`, type: 'timeline_task_completed' as TimelineEventType, timestamp: chunk.timestamp || new Date().toISOString(), message: taskMessage, status: taskStatus }];
+            });
+            break;
+          
+          case 'timeline_plan':
+          case 'timeline_agent_added':
+          case 'timeline_agent_executing':
+          case 'timeline_narrative':
+          case 'timeline_tool_started':
+          case 'timeline_confirmation_required':
+          case 'timeline_confirmation_received':
+          case 'timeline_memory_searching':
+          case 'timeline_memory_stored':
+          case 'timeline_artifact_scanning':
+          case 'timeline_analyzing_query':
+          case 'timeline_generating_response':
+          case 'timeline_task_failed':
+            const confirmTimelineEvent: TimelineEvent = {
+              eventId: chunk.eventId || `event-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+              type: chunk.type,
+              timestamp: chunk.timestamp || new Date().toISOString(),
+              message: chunk.message,
+              agentName: chunk.agentName,
+              agentIcon: chunk.agentIcon,
+              agentDisplayName: chunk.agentDisplayName,
+              toolName: chunk.toolName,
+              toolDisplayName: chunk.toolDisplayName,
+              query: chunk.query,
+              result: chunk.result,
+              data: chunk.data,
+              summary: chunk.summary,
+              status: (chunk.type === 'timeline_agent_executing' || chunk.type === 'timeline_tool_started' 
+                || chunk.type === 'timeline_memory_searching' || chunk.type === 'timeline_artifact_scanning'
+                || chunk.type === 'timeline_analyzing_query' || chunk.type === 'timeline_generating_response') 
+                ? 'in-progress' : (chunk.status as 'completed' | 'in-progress' | 'failed' | 'pending' || 'completed'),
+            };
+            setTimelineEvents((prev) => [...prev, confirmTimelineEvent]);
+            break;
 
           case 'error':
             throw new Error(chunk.error || chunk.message || 'Action execution failed');
@@ -1790,7 +2622,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             });
             break;
         }
-      });
+      }, { messageId: timelineMessageId || responseMessageId, chatId: currentChatId || undefined });
     } catch (error: any) {
       if (error.message && (error.message.includes('Session expired') || error.message.includes('Authentication required'))) {
         router.push('/auth/signin');
@@ -1891,7 +2723,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       setInput('');
       // Invalidate cache and reload
       invalidateChatCache();
-      await loadChatHistory();
+      await loadChatHistory(true);
       onChatIdChange?.(newSession.id);
     }
   };
@@ -1910,7 +2742,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
         // Invalidate caches
         invalidateChatCache();
         invalidateChatSessionCache(chatIdToDelete);
-        await loadChatHistory();
+        await loadChatHistory(true);
         
         // If deleting current chat, create new one
         if (chatIdToDelete === currentChatId) {
@@ -2005,6 +2837,13 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
           </div>
           
           <div className="w-full max-w-3xl">
+            <FileAttachment
+              ref={fileAttachmentRef}
+              onFileAttached={handleFileAttached}
+              onFileRemoved={handleFileRemoved}
+              attachedFiles={attachedFiles}
+              disabled={isLoading}
+            />
             <VercelV0Chat
               value={input}
               onChange={setInput}
@@ -2012,6 +2851,8 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
               placeholder="Ask me anything... (e.g., 'schedule a meeting and create a document')"
               disabled={isLoading}
               showExamples={true}
+              onAttachFile={handleAttachFile}
+              attachedFiles={attachedFiles}
               examples={[
                 {
                   icon: <Calendar className="w-4 h-4" />,
@@ -2057,6 +2898,68 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 >
                   {message.role === 'user' ? (
                     <div className="max-w-3xl rounded-2xl px-6 py-2 bg-neutral-900 border border-neutral-800">
+                      {/* File previews - shown above message text like ChatGPT */}
+                      {message.files && message.files.length > 0 && (
+                        <div className={`flex flex-wrap gap-2 ${message.content ? 'mb-3 pb-2' : ''}`}>
+                          {message.files.map((file) => {
+                            const isImage = file.fileType === 'image';
+                            
+                            if (isImage && file.url) {
+                              // Image preview - small thumbnail like ChatGPT
+                              return (
+                                <div 
+                                  key={file.id}
+                                  className="relative group cursor-pointer rounded-lg overflow-hidden border border-neutral-700 hover:border-neutral-500 transition-colors"
+                                  onClick={() => file.url && window.open(file.url, '_blank')}
+                                >
+                                  <img
+                                    src={file.url}
+                                    alt={file.originalFilename}
+                                    className="w-40 h-40 object-cover"
+                                  />
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                                </div>
+                              );
+                            }
+                            
+                            // Document/audio/video/other file - compact chip style
+                            const fileIcon = file.fileType === 'document' ? '📄' 
+                              : file.fileType === 'audio' ? '🎵'
+                              : file.fileType === 'video' ? '🎥'
+                              : '📎';
+                            
+                            const formatSize = (bytes: number) => {
+                              if (bytes < 1024) return `${bytes} B`;
+                              if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                              return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                            };
+
+                            const getExtension = (filename: string) => {
+                              const ext = filename.split('.').pop()?.toUpperCase();
+                              return ext || '';
+                            };
+                            
+                            return (
+                              <div 
+                                key={file.id}
+                                className="flex items-center gap-3 rounded-xl bg-neutral-800 border border-neutral-700 px-4 py-3 min-w-[200px] max-w-[300px] hover:bg-neutral-750 hover:border-neutral-600 transition-colors cursor-default"
+                              >
+                                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-neutral-700 flex items-center justify-center">
+                                  <span className="text-lg">{fileIcon}</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-neutral-200 truncate">
+                                    {file.originalFilename}
+                                  </p>
+                                  <p className="text-xs text-neutral-500">
+                                    {getExtension(file.originalFilename)} · {formatSize(file.size)}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       <div 
                         className="whitespace-pre-wrap"
                         style={{ 
@@ -2071,17 +2974,40 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                         {message.content}
                       </div>
                     </div>
-                  ) : message.isError ? (
-                    <div className="max-w-3xl rounded-2xl px-6 py-2 bg-red-500/10 border border-red-500/30 text-red-400">
-                      <div className="whitespace-pre-wrap">{message.content}</div>
-                    </div>
-                  ) : (message as any).isPendingConfirmation ? (
+                  ) : (
+                    /* Assistant message - always show timeline at top if this message owns it */
+                    <div className="max-w-3xl w-full">
+                      {/* Timeline - persists at top of assistant response (current streaming or stored) */}
+                      {(timelineMessageId === message.id && timelineEvents.length > 0) ? (
+                        <div className="mb-4">
+                          <TimelineContainer
+                            events={timelineEvents}
+                            isVisible={showTimeline}
+                            onToggleVisibility={() => setShowTimeline(!showTimeline)}
+                          />
+                        </div>
+                      ) : (messageTimelines[message.id] && messageTimelines[message.id].length > 0) && (
+                        <div className="mb-4">
+                          <TimelineContainer
+                            events={messageTimelines[message.id]}
+                            isVisible={showTimeline}
+                            onToggleVisibility={() => setShowTimeline(!showTimeline)}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Message content based on type */}
+                      {message.isError ? (
+                        <div className="rounded-2xl px-6 py-2 bg-red-500/10 border border-red-500/30 text-red-400">
+                          <div className="whitespace-pre-wrap">{message.content}</div>
+                        </div>
+                      ) : (message as any).isPendingConfirmation ? (
                     // Confirmation request message - Glassmorphic design with real logos
                     (() => {
                       const confirmData = (message as any).confirmationData;
                       const appLogo = getAppLogo(confirmData?.agentName, confirmData?.actionType);
                       return (
-                        <div className="max-w-3xl w-full">
+                        <>
                           {/* Preview Card */}
                           <div className="rounded-2xl bg-[#1a1a1a]/90 border border-white/[0.06] overflow-hidden">
                             {/* Header with logo and title */}
@@ -2161,21 +3087,19 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                               </button>
                             </div>
                           </div>
-                        </div>
+                        </>
                       );
                     })()
                   ) : (message as any).isCanceled ? (
                     // Canceled action message - Minimal style
-                    <div className="max-w-3xl w-full">
-                      <div className="rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-gray-500/10 flex items-center justify-center">
-                            <X className="w-4 h-4 text-gray-400" />
-                          </div>
-                          <div>
-                            <span className="text-sm font-medium text-gray-400">Action Skipped</span>
-                            <p className="text-xs text-gray-600 mt-0.5">The action was not executed</p>
-                          </div>
+                    <div className="rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gray-500/10 flex items-center justify-center">
+                          <X className="w-4 h-4 text-gray-400" />
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-400">Action Skipped</span>
+                          <p className="text-xs text-gray-600 mt-0.5">The action was not executed</p>
                         </div>
                       </div>
                     </div>
@@ -2188,7 +3112,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                       description={(message as any).confirmationData?.description}
                     />
                   ) : (
-                    <div className="max-w-3xl">
+                    <>
                       {(() => {
                         // Check for meeting creation (Google Meet)
                         const meetingInfo = extractMeetingInfo(message.content);
@@ -2231,7 +3155,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                           color: '#F1F2F5'
                         }}
                       >
-                        {formatMessageContent(message.content)}
+                        <MarkdownContent content={message.content} />
                       </div>
                       
                       <div className="mt-3 pt-3 border-t border-neutral-800/30 flex items-center justify-between text-xs">
@@ -2282,13 +3206,24 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                           )}
                         </div>
                       </div>
+                    </>
+                  )}
                     </div>
                   )}
                 </div>
               ))}
 
               {isThinking && (
-                <div className="flex justify-start max-w-3xl mb-4">
+                <div className="flex flex-col gap-4 max-w-3xl mb-4">
+                  {/* Show timeline during thinking ONLY if no streaming message owns it yet */}
+                  {/* This prevents duplicate timeline when the assistant message already renders it */}
+                  {timelineEvents.length > 0 && !streamingMessageId && (
+                    <TimelineContainer
+                      events={timelineEvents}
+                      isVisible={showTimeline}
+                      onToggleVisibility={() => setShowTimeline(!showTimeline)}
+                    />
+                  )}
                   <ThinkingIndicator message={thinkingMessage} />
                 </div>
               )}
@@ -2299,6 +3234,13 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       
           <div className="bg-black p-6">
             <div className="max-w-3xl mx-auto">
+              <FileAttachment
+                ref={fileAttachmentRef}
+                onFileAttached={handleFileAttached}
+                onFileRemoved={handleFileRemoved}
+                attachedFiles={attachedFiles}
+                disabled={isLoading}
+              />
               <VercelV0Chat
                 value={input}
                 onChange={setInput}
@@ -2306,6 +3248,8 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 placeholder="Ask me anything... (e.g., 'schedule a meeting and create a document')"
                 disabled={isLoading}
                 showExamples={false}
+                onAttachFile={handleAttachFile}
+                attachedFiles={attachedFiles}
               />
               <p className="text-xs text-gray-600 mt-3 text-center">
                 {isLoading ? 'Processing your request...' : 'The Main Agent can coordinate multiple services in a single query'}

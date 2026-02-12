@@ -15,6 +15,17 @@ export interface ChatMessage {
   agentsUsed?: string[];
   processingTime?: string;
   isError?: boolean;
+  sequenceOrder?: number; // For reliable message ordering
+  // File attachments (persisted as JSONB in chat_messages table)
+  files?: Array<{
+    id: string;
+    filename: string;
+    originalFilename: string;
+    mimeType: string;
+    size: number;
+    url?: string;
+    fileType: 'image' | 'document' | 'audio' | 'video' | 'other';
+  }>;
   // Confirmation flow properties
   isPendingConfirmation?: boolean;
   isConfirmed?: boolean;
@@ -485,6 +496,82 @@ export const invalidateChatCache = () => {
 export const invalidateChatSessionCache = (chatId: string) => {
   const cacheStore = useCacheStore.getState();
   cacheStore.invalidateChatSessionDetail(chatId);
+};
+
+/**
+ * Timeline event interface
+ */
+export interface TimelineEventData {
+  type: string;
+  eventId?: string;
+  agentName?: string;
+  agentDisplayName?: string;
+  agentIcon?: string;
+  toolName?: string;
+  toolDisplayName?: string;
+  status?: string;
+  message?: string;
+  description?: string;
+  icon?: string;
+  data?: any;
+  result?: any;
+  timestamp?: string;
+  sequenceOrder?: number;
+}
+
+/**
+ * Fetch timeline events for a specific message
+ */
+export const getTimelineEventsForMessage = async (chatId: string, messageId: string): Promise<TimelineEventData[]> => {
+  try {
+    const response = await fetch(`${API_URL}/api/chat/sessions/${chatId}/messages/${messageId}/timeline`, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message || 'Failed to fetch timeline events');
+    }
+
+    return data.events || [];
+  } catch (error) {
+    console.error('Error in getTimelineEventsForMessage:', error);
+    return [];
+  }
+};
+
+/**
+ * Fetch timeline events for multiple messages at once
+ */
+export const getTimelineEventsForMessages = async (messageIds: string[]): Promise<Record<string, TimelineEventData[]>> => {
+  try {
+    const response = await fetch(`${API_URL}/api/chat/timeline/batch`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ messageIds }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message || 'Failed to fetch timeline events');
+    }
+
+    return data.eventsByMessage || {};
+  } catch (error) {
+    console.error('Error in getTimelineEventsForMessages:', error);
+    return {};
+  }
 };
 
 /**

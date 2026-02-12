@@ -150,7 +150,10 @@ export async function processQueryStreaming(
   conversationHistory: ConversationMessage[] | undefined,
   onChunk: (chunk: StreamChunk) => void,
   conversationId?: string,  // Optional: for artifact memory
-  userLocation?: UserLocation  // Optional: for Maps queries requiring location
+  userLocation?: UserLocation,  // Optional: for Maps queries requiring location
+  messageId?: string,  // Optional: for storing timeline events
+  fileIds?: string[],  // Optional: for file context
+  userMessageId?: string  // Optional: user message ID for linking files
 ): Promise<void> {
   // Import auth functions dynamically to avoid circular dependencies
   const { getAuthToken, refreshAuthToken } = await import('./auth');
@@ -175,6 +178,9 @@ export async function processQueryStreaming(
         conversationId,  // Pass conversationId for artifact memory
         userLocation,  // Pass userLocation for Maps queries
         chatId: conversationId,  // Pass chatId (same as conversationId) for database chat history retrieval
+        messageId,  // Pass messageId for storing timeline events
+        fileIds,  // Pass fileIds for file context
+        userMessageId,  // Pass userMessageId for linking files to user message
       }),
     });
   };
@@ -203,13 +209,15 @@ export async function processQueryStreaming(
     throw new Error(errorData.message || errorData.error || 'Failed to process query');
   }
 
-  // Process the SSE stream
+  // Process the SSE stream with proper buffering
   const reader = response.body?.getReader();
   const decoder = new TextDecoder();
 
   if (!reader) {
     throw new Error('No response body');
   }
+
+  let buffer = '';
 
   try {
     while (true) {
@@ -219,11 +227,15 @@ export async function processQueryStreaming(
         break;
       }
 
-      // Decode the chunk
-      const chunk = decoder.decode(value, { stream: true });
+      // Decode the chunk and add to buffer
+      buffer += decoder.decode(value, { stream: true });
       
-      // Split by newlines and process each event
-      const lines = chunk.split('\n');
+      // Process complete SSE events from buffer
+      // SSE events are separated by double newlines
+      const lines = buffer.split('\n');
+      
+      // Keep the last (potentially incomplete) line in the buffer
+      buffer = lines.pop() || '';
       
       for (const line of lines) {
         if (line.startsWith('data: ')) {
@@ -231,9 +243,19 @@ export async function processQueryStreaming(
             const data = JSON.parse(line.slice(6));
             onChunk(data);
           } catch (e) {
-            console.error('Error parsing SSE data:', e);
+            // Skip malformed JSON lines
           }
         }
+      }
+    }
+
+    // Process any remaining data in buffer
+    if (buffer.startsWith('data: ')) {
+      try {
+        const data = JSON.parse(buffer.slice(6));
+        onChunk(data);
+      } catch (e) {
+        // Ignore incomplete data at the end
       }
     }
   } finally {
@@ -242,7 +264,21 @@ export async function processQueryStreaming(
 }
 
 export interface StreamChunk {
-  type: 'thinking' | 'status' | 'analysis' | 'content' | 'metadata' | 'error' | 'done' | 'confirmation_request';
+  type: 'thinking' | 'status' | 'analysis' | 'content' | 'metadata' | 'error' | 'done' | 'confirmation_request' 
+    // Processing phases
+    | 'timeline_memory_searching' | 'timeline_memory_retrieved' | 'timeline_memory_stored'
+    | 'timeline_artifact_scanning' | 'timeline_artifact_resolved'
+    | 'timeline_analyzing_query' | 'timeline_analysis_complete'
+    | 'timeline_generating_response'
+    // Agent lifecycle
+    | 'timeline_plan' | 'timeline_agent_added' | 'timeline_agent_executing' | 'timeline_agent_completed' 
+    | 'timeline_agent_failed' | 'timeline_narrative' 
+    // Tools
+    | 'timeline_tool_started' | 'timeline_tool_completed' | 'timeline_tool_failed' 
+    // Confirmation
+    | 'timeline_confirmation_required' | 'timeline_confirmation_received' 
+    // Completion
+    | 'timeline_task_completed' | 'timeline_task_failed';
   status?: 'start' | 'stop';
   message?: string;
   agents?: string[];
@@ -270,6 +306,16 @@ export interface StreamChunk {
     totalSteps: number;
     previousResults?: any[];
   };
+  // Timeline event fields
+  eventId?: string;
+  eventType?: string;
+  agentIcon?: string;
+  agentDisplayName?: string;
+  toolDisplayName?: string;
+  query?: string;
+  result?: any;
+  data?: any;
+  summary?: string;
 }
 
 /**
@@ -432,7 +478,8 @@ export function getAgentColor(agentKey: string): string {
  */
 export async function confirmActionStreaming(
   requestId: string,
-  onChunk: (chunk: StreamChunk) => void
+  onChunk: (chunk: StreamChunk) => void,
+  options?: { messageId?: string; chatId?: string }
 ): Promise<void> {
   const { getAuthToken, refreshAuthToken } = await import('./auth');
   
@@ -449,7 +496,11 @@ export async function confirmActionStreaming(
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ requestId }),
+      body: JSON.stringify({ 
+        requestId,
+        messageId: options?.messageId,
+        chatId: options?.chatId
+      }),
     });
   };
 

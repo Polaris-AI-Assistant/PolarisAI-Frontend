@@ -83,6 +83,8 @@ interface VercelV0ChatProps {
         label: string;
         onClick?: () => void;
     }>;
+    onAttachFile?: () => void;
+    attachedFiles?: any[];
 }
 
 export function VercelV0Chat({
@@ -93,6 +95,8 @@ export function VercelV0Chat({
     disabled = false,
     showExamples = true,
     examples,
+    onAttachFile,
+    attachedFiles = [],
 }: VercelV0ChatProps) {
     const [internalValue, setInternalValue] = useState("");
     const value = externalValue !== undefined ? externalValue : internalValue;
@@ -181,16 +185,19 @@ export function VercelV0Chat({
 
                     <div className="flex items-center justify-between p-3">
                         <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                className="group p-2 hover:bg-neutral-800 rounded-lg transition-colors flex items-center gap-1"
-                                disabled={disabled}
-                            >
-                                <Paperclip className="w-4 h-4 text-white" />
-                                <span className="text-xs text-zinc-400 hidden group-hover:inline transition-opacity">
-                                    Attach
-                                </span>
-                            </button>
+                            {onAttachFile && (
+                                <button
+                                    type="button"
+                                    onClick={onAttachFile}
+                                    className="group p-2 hover:bg-neutral-800 rounded-lg transition-colors flex items-center gap-1"
+                                    disabled={disabled}
+                                >
+                                    <Paperclip className="w-4 h-4 text-white" />
+                                    <span className="text-xs text-zinc-400 hidden group-hover:inline transition-opacity">
+                                        Attach {attachedFiles.length > 0 && `(${attachedFiles.length})`}
+                                    </span>
+                                </button>
+                            )}
                         </div>
                         <div className="flex items-center gap-2">
                             <button

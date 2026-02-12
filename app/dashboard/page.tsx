@@ -20,13 +20,46 @@ import {
   getGroupedChatSessions,
   GroupedChats,
   invalidateChatCache,
+  ChatSession,
 } from '../../lib/chatHistory'
+import { useRealtimeChat } from '../../lib/useRealtimeChat'
+import { useSocket } from '@/contexts/SocketContext'
 import {
   getAllConnectionStatusesCached,
   invalidateConnectionCache,
   updateConnectionStatusCache,
 } from '../../lib/cachedConnections'
 import { useCacheStore } from '../../lib/stores/cacheStore'
+
+// Small floating badge showing WebSocket connection status (for debugging)
+function SocketStatusBadge() {
+  const { connectionState, onlineUsers } = useSocket();
+  const [show, setShow] = useState(true);
+
+  if (!show) return null;
+
+  const stateConfig: Record<string, { color: string; label: string }> = {
+    connected: { color: 'bg-green-500', label: 'WS Connected' },
+    connecting: { color: 'bg-yellow-500', label: 'WS Connecting...' },
+    reconnecting: { color: 'bg-yellow-500', label: 'WS Reconnecting...' },
+    disconnected: { color: 'bg-red-500', label: 'WS Disconnected' },
+  };
+  const { color, label } = stateConfig[connectionState] || stateConfig.disconnected;
+
+  return (
+    <div
+      className="fixed bottom-4 left-4 z-[9999] flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-white bg-black/80 border border-white/10 backdrop-blur-sm shadow-lg cursor-pointer select-none"
+      onClick={() => setShow(false)}
+      title="Click to dismiss. Check browser console for [Socket] logs."
+    >
+      <span className={`inline-block w-2 h-2 rounded-full ${color} animate-pulse`} />
+      <span>{label}</span>
+      {connectionState === 'connected' && (
+        <span className="text-white/50">• {onlineUsers.length} online</span>
+      )}
+    </div>
+  );
+}
 
 function Dashboard() {
   const router = useRouter()
@@ -79,8 +112,8 @@ function Dashboard() {
   })
 
   // Load chat history
-  const loadChatHistory = useCallback(async () => {
-    const grouped = await getGroupedChatSessions()
+  const loadChatHistory = useCallback(async (forceRefresh: boolean = false) => {
+    const grouped = await getGroupedChatSessions(forceRefresh)
     setGroupedChats(grouped)
   }, [])
 
@@ -115,7 +148,7 @@ function Dashboard() {
         setCurrentChatId(newSession.id)
         // Invalidate cache and refresh chat history
         invalidateChatCache()
-        await loadChatHistory()
+        await loadChatHistory(true)
       }
     } catch (error) {
       console.error('Error creating new chat:', error)
@@ -134,7 +167,7 @@ function Dashboard() {
       if (success) {
         // Invalidate cache and refresh
         invalidateChatCache()
-        await loadChatHistory()
+        await loadChatHistory(true)
         if (chatIdToDelete === currentChatId) {
           await handleNewChat()
         }
@@ -145,8 +178,63 @@ function Dashboard() {
   // Handle chat ID change from MainAgentContent
   const handleChatIdChange = useCallback((chatId: string) => {
     setCurrentChatId(chatId)
-    loadChatHistory()
+    loadChatHistory(true)
   }, [loadChatHistory])
+
+  // Setup realtime subscription for chat session updates (sidebar)
+  useRealtimeChat({
+    currentChatId,
+    enabled: true,
+    onSessionUpdate: useCallback((session: { id: string; title: string; messageCount: number }) => {
+      // Update the session in groupedChats when it changes
+      setGroupedChats((prev) => {
+        const updateInGroup = (groups: ChatSession[]) =>
+          groups.map((s) =>
+            s.id === session.id
+              ? { ...s, title: session.title, messageCount: session.messageCount }
+              : s
+          );
+        return {
+          today: updateInGroup(prev.today),
+          yesterday: updateInGroup(prev.yesterday),
+          lastWeek: updateInGroup(prev.lastWeek),
+          lastMonth: updateInGroup(prev.lastMonth),
+          older: updateInGroup(prev.older),
+        };
+      });
+    }, []),
+    onSessionInsert: useCallback((session: { id: string; title: string; messageCount: number }) => {
+      // Add new session to today's group
+      setGroupedChats((prev) => ({
+        ...prev,
+        today: [
+          {
+            id: session.id,
+            title: session.title,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            messages: [],
+            messageCount: session.messageCount,
+          },
+          ...prev.today,
+        ],
+      }));
+    }, []),
+    onSessionDelete: useCallback((sessionId: string) => {
+      // Remove session from all groups
+      setGroupedChats((prev) => {
+        const removeFromGroup = (groups: ChatSession[]) =>
+          groups.filter((s) => s.id !== sessionId);
+        return {
+          today: removeFromGroup(prev.today),
+          yesterday: removeFromGroup(prev.yesterday),
+          lastWeek: removeFromGroup(prev.lastWeek),
+          lastMonth: removeFromGroup(prev.lastMonth),
+          older: removeFromGroup(prev.older),
+        };
+      });
+    }, []),
+  });
 
   // Handle tab from URL params
   useEffect(() => {
@@ -187,8 +275,8 @@ function Dashboard() {
         }
       }
       
-      // Then fetch fresh data in background (will use cache if not stale)
-      const grouped = await getGroupedChatSessions()
+      // Then fetch fresh data from API (always force refresh on mount)
+      const grouped = await getGroupedChatSessions(true)
       setGroupedChats(grouped)
       
       // Check if there are any existing chats with messages
@@ -920,6 +1008,10 @@ function Dashboard() {
   return (
   <div className="flex h-screen bg-black">
       <style>{scrollbarStyles}</style>
+
+      {/* WebSocket Debug Badge - bottom-left corner */}
+      <SocketStatusBadge />
+
       {/* Sidebar */}
   <div className="w-72 bg-[#171717] text-white flex flex-col h-screen">
         {/* Logo/Brand Section */}
