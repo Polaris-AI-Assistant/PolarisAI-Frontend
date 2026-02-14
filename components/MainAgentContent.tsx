@@ -59,13 +59,15 @@ import { getSupabaseClient, ChatMessageRow, rowToChatMessage } from '../lib/supa
 import { VercelV0Chat } from '@/components/ui/v0-ai-chat';
 import { ThinkingIndicator } from '@/components/ui/thinking-indicator';
 import { FileAttachment, FileAttachmentRef } from '@/components/ui/FileAttachment';
-import { FileMessage } from '@/components/ui/FileMessage';
+import FileMessage from '@/components/ui/FileMessage';
 import { UploadedFile } from '@/lib/files';
-import { Calendar, FileText, ClipboardList, Github, Video, Check, X, Mail, AlertCircle, Brain } from 'lucide-react';
+import { Calendar, FileText, ClipboardList, Github, Video, Check, X, Mail, AlertCircle, Brain, Volume2, VolumeX } from 'lucide-react';
 import { MeetingCard } from '@/components/ui/meeting-card';
 import { FlightResultsInline, FlightData } from '@/components/ui/flight-results-card';
 import { TimelineContainer, TimelineEvent, TimelineEventType } from '@/components/Timeline';
 import { MarkdownContent } from '@/components/ui/MarkdownContent';
+import { useVoiceInput, getBaseLanguageName } from '@/hooks/useVoiceInput';
+import { useTTS } from '@/hooks/useTTS';
 
 // Helper function to format markdown-style text
 const formatMessageContent = (content: string) => {
@@ -1382,6 +1384,10 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
   const [timelineMessageId, setTimelineMessageId] = useState<string | null>(null);
   // Store persisted timeline events per message (for viewing historical timelines)
   const [messageTimelines, setMessageTimelines] = useState<Record<string, TimelineEvent[]>>({});
+
+  // Voice input and multi-language state
+  const [voiceLanguage, setVoiceLanguage] = useState('en-US');
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const streamingContentRef = useRef<string>('');
@@ -1389,6 +1395,24 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
   const shouldSaveRef = useRef<boolean>(false);
   const isSavingRef = useRef<boolean>(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Voice input hook
+  const voiceInput = useVoiceInput({
+    language: voiceLanguage,
+    continuous: true,
+    interimResults: true,
+    onTranscript: (transcript, isFinal) => {
+      if (isFinal) {
+        setInput(transcript);
+      }
+    },
+    onError: (error) => {
+      console.error('[VoiceInput] Error:', error);
+    },
+  });
+
+  // TTS hook for reading assistant messages
+  const tts = useTTS({ language: voiceLanguage });
 
   useEffect(() => {
     return () => {
@@ -1693,6 +1717,12 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     const query = queryText || input.trim();
     
     if (!query || isLoading) return;
+
+    // Stop voice input if recording
+    if (voiceInput.isListening) {
+      voiceInput.stopListening();
+    }
+    voiceInput.resetTranscript();
 
     setInput('');
     setShowExamples(false);
@@ -2203,7 +2233,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             });
             break;
         }
-      }, currentChatId || undefined, userLocation, assistantMessageId, fileIds, userMessage.id);  // Pass currentChatId for artifact memory, userLocation for Maps, messageId for timeline storage, fileIds for file context, userMessageId for file persistence
+      }, currentChatId || undefined, userLocation, assistantMessageId, fileIds, userMessage.id, getBaseLanguageName(voiceLanguage));  // Pass currentChatId for artifact memory, userLocation for Maps, messageId for timeline, fileIds for file context, userMessageId, responseLanguage for multi-lang
 
     } catch (error: any) {
       if (error.message && (error.message.includes('Session expired') || error.message.includes('Authentication required'))) {
@@ -2853,6 +2883,14 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
               showExamples={true}
               onAttachFile={handleAttachFile}
               attachedFiles={attachedFiles}
+              isListening={voiceInput.isListening}
+              isVoiceSupported={voiceInput.isSupported}
+              onToggleVoice={voiceInput.toggleListening}
+              audioLevel={voiceInput.audioLevel}
+              interimTranscript={voiceInput.interimTranscript}
+              voiceError={voiceInput.error}
+              selectedLanguage={voiceLanguage}
+              onLanguageChange={setVoiceLanguage}
               examples={[
                 {
                   icon: <Calendar className="w-4 h-4" />,
@@ -3180,6 +3218,25 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                           )}
                         </div>
                         <div className="flex items-center gap-3">
+                          {/* Read Aloud (TTS) button */}
+                          {tts.isSupported && message.content && (
+                            <button
+                              onClick={() => tts.toggle(message.content)}
+                              className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-all duration-200 ${
+                                tts.isSpeaking
+                                  ? 'bg-violet-500/10 text-violet-400'
+                                  : 'bg-neutral-800 hover:bg-neutral-700 text-gray-400 hover:text-gray-300'
+                              }`}
+                              title={tts.isSpeaking ? 'Stop reading' : 'Read aloud'}
+                            >
+                              {tts.isSpeaking ? (
+                                <VolumeX className="w-3.5 h-3.5" />
+                              ) : (
+                                <Volume2 className="w-3.5 h-3.5" />
+                              )}
+                              <span>{tts.isSpeaking ? 'Stop' : 'Read'}</span>
+                            </button>
+                          )}
                           {/* Add to Memory button */}
                           {messages.findIndex(m => m.id === message.id) > 0 && (
                             <button
@@ -3250,6 +3307,14 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 showExamples={false}
                 onAttachFile={handleAttachFile}
                 attachedFiles={attachedFiles}
+                isListening={voiceInput.isListening}
+                isVoiceSupported={voiceInput.isSupported}
+                onToggleVoice={voiceInput.toggleListening}
+                audioLevel={voiceInput.audioLevel}
+                interimTranscript={voiceInput.interimTranscript}
+                voiceError={voiceInput.error}
+                selectedLanguage={voiceLanguage}
+                onLanguageChange={setVoiceLanguage}
               />
               <p className="text-xs text-gray-600 mt-3 text-center">
                 {isLoading ? 'Processing your request...' : 'The Main Agent can coordinate multiple services in a single query'}

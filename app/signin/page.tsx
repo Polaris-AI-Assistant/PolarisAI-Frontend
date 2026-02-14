@@ -99,6 +99,7 @@ const SignInPageDemo = () => {
 
       // Redirect to the intended page or dashboard
       const redirectTo = searchParams?.get('redirect') || '/dashboard';
+
       router.push(redirectTo);
     } catch (err: any) {
       setError(err.message || 'Failed to sign in. Please try again.');

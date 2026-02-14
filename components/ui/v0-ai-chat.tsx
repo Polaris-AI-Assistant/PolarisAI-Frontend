@@ -13,7 +13,12 @@ import {
     ArrowUpIcon,
     Paperclip,
     PlusIcon,
+    Mic,
+    MicOff,
+    Volume2,
+    Square,
 } from "lucide-react";
+import { LanguageSelector } from "@/components/ui/language-selector";
 
 interface UseAutoResizeTextareaProps {
     minHeight: number;
@@ -85,6 +90,16 @@ interface VercelV0ChatProps {
     }>;
     onAttachFile?: () => void;
     attachedFiles?: any[];
+    // Voice input props
+    isListening?: boolean;
+    isVoiceSupported?: boolean;
+    onToggleVoice?: () => void;
+    audioLevel?: number;
+    interimTranscript?: string;
+    voiceError?: string | null;
+    // Language props
+    selectedLanguage?: string;
+    onLanguageChange?: (lang: string) => void;
 }
 
 export function VercelV0Chat({
@@ -97,6 +112,14 @@ export function VercelV0Chat({
     examples,
     onAttachFile,
     attachedFiles = [],
+    isListening = false,
+    isVoiceSupported = false,
+    onToggleVoice,
+    audioLevel = 0,
+    interimTranscript = "",
+    voiceError = null,
+    selectedLanguage = "en-US",
+    onLanguageChange,
 }: VercelV0ChatProps) {
     const [internalValue, setInternalValue] = useState("");
     const value = externalValue !== undefined ? externalValue : internalValue;
@@ -198,8 +221,64 @@ export function VercelV0Chat({
                                     </span>
                                 </button>
                             )}
+
+                            {/* Language Selector */}
+                            {onLanguageChange && (
+                                <LanguageSelector
+                                    selectedLanguage={selectedLanguage}
+                                    onLanguageChange={onLanguageChange}
+                                    disabled={disabled || isListening}
+                                    compact
+                                />
+                            )}
                         </div>
                         <div className="flex items-center gap-2">
+                            {/* Voice Input Button */}
+                            {isVoiceSupported && onToggleVoice && (
+                                <div className="relative flex items-center">
+                                    {/* Pulsing ring animation when listening */}
+                                    {isListening && (
+                                        <>
+                                            <span className="absolute inset-0 rounded-lg animate-ping bg-red-500/20" />
+                                            <span className="absolute inset-0 rounded-lg animate-pulse bg-red-500/10" />
+                                        </>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={onToggleVoice}
+                                        disabled={disabled}
+                                        className={cn(
+                                            "relative z-10 p-2 rounded-lg text-sm transition-all duration-200 flex items-center gap-1.5",
+                                            isListening
+                                                ? "bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.3)]"
+                                                : "text-zinc-400 hover:bg-neutral-800 hover:text-white border border-transparent hover:border-neutral-700"
+                                        )}
+                                        title={isListening ? "Stop recording" : "Start voice input"}
+                                    >
+                                        {isListening ? (
+                                            <>
+                                                {/* Audio level bars */}
+                                                <div className="flex items-end gap-[2px] h-4 mr-0.5">
+                                                    {[0, 1, 2, 3].map(i => (
+                                                        <div
+                                                            key={i}
+                                                            className="w-[3px] bg-red-400 rounded-full transition-all duration-75"
+                                                            style={{
+                                                                height: `${Math.max(4, (audioLevel * 16) * (0.4 + Math.sin(Date.now() / 150 + i * 1.5) * 0.3 + 0.3))}px`,
+                                                                animationDelay: `${i * 100}ms`,
+                                                            }}
+                                                        />
+                                                    ))}
+                                                </div>
+                                                <Square className="w-3.5 h-3.5 fill-current" />
+                                            </>
+                                        ) : (
+                                            <Mic className="w-4 h-4" />
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+
                             <button
                                 type="button"
                                 className="px-2 py-1 rounded-lg text-sm text-zinc-400 transition-colors border border-dashed border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800 flex items-center justify-between gap-1"
@@ -231,6 +310,24 @@ export function VercelV0Chat({
                             </button>
                         </div>
                     </div>
+
+                    {/* Voice Error Toast */}
+                    {voiceError && (
+                        <div className="mx-3 mb-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400 flex items-center gap-2">
+                            <MicOff className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span>{voiceError}</span>
+                        </div>
+                    )}
+
+                    {/* Interim transcript preview */}
+                    {isListening && interimTranscript && (
+                        <div className="mx-3 mb-2 px-3 py-1.5 bg-violet-500/5 border border-violet-500/10 rounded-lg">
+                            <p className="text-xs text-violet-300/70 italic truncate">
+                                <span className="inline-block w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse mr-1.5 relative top-[-1px]" />
+                                {interimTranscript}
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 {showExamples && displayExamples.length > 0 && (

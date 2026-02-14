@@ -86,7 +86,7 @@ export default function Home() {
       const hasOAuthTokens = await handleOAuthTokensFromHash();
       
       if (hasOAuthTokens) {
-        // OAuth login successful, redirect to dashboard
+        // OAuth login successful — redirect to dashboard
         router.push('/dashboard');
         return;
       }

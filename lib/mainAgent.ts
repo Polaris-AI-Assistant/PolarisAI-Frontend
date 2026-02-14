@@ -153,7 +153,8 @@ export async function processQueryStreaming(
   userLocation?: UserLocation,  // Optional: for Maps queries requiring location
   messageId?: string,  // Optional: for storing timeline events
   fileIds?: string[],  // Optional: for file context
-  userMessageId?: string  // Optional: user message ID for linking files
+  userMessageId?: string,  // Optional: user message ID for linking files
+  responseLanguage?: string  // Optional: for multi-language response support
 ): Promise<void> {
   // Import auth functions dynamically to avoid circular dependencies
   const { getAuthToken, refreshAuthToken } = await import('./auth');
@@ -181,6 +182,7 @@ export async function processQueryStreaming(
         messageId,  // Pass messageId for storing timeline events
         fileIds,  // Pass fileIds for file context
         userMessageId,  // Pass userMessageId for linking files to user message
+        responseLanguage,  // Pass responseLanguage for multi-language support
       }),
     });
   };
@@ -316,6 +318,7 @@ export interface StreamChunk {
   result?: any;
   data?: any;
   summary?: string;
+  needsClarification?: boolean;
 }
 
 /**

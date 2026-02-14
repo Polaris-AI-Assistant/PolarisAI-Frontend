@@ -14,6 +14,7 @@ import { checkMicrosoftStatus, connectMicrosoftApp, disconnectMicrosoftApp, Micr
 import { MainAgentContent } from '../../components/MainAgentContent'
 import ProfileDropdown from '../../components/kokonutui/profile-dropdown'
 import AppsIntegrations from '../../components/apps-integrations'
+import SchedulesContent from '../../components/SchedulesContent'
 import {
   createNewChatSession,
   deleteChatSession,
@@ -1070,6 +1071,21 @@ function Dashboard() {
                 <span>Main Agent</span>
               </button>
             </li>
+            <li>
+              <button
+                onClick={() => setActiveTab('Schedules')}
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  activeTab === 'Schedules'
+                    ? 'bg-[#404040] text-white'
+                    : 'text-white hover:bg-[#404040] hover:text-white'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Schedules</span>
+              </button>
+            </li>
             {/* <li>
               <a
                 href="/search"
@@ -1267,6 +1283,8 @@ function Dashboard() {
             chatId={currentChatId}
             onChatIdChange={handleChatIdChange}
           />
+        ) : activeTab === 'Schedules' ? (
+          <SchedulesContent />
         ) : (
           <AppsIntegrations
             gmailStatus={gmailStatus}
