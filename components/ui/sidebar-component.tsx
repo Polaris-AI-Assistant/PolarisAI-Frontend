@@ -253,10 +253,12 @@ function IconNavigation({
   activeSection,
   onSectionChange,
   onDashboardClick,
+  onVaultClick,
 }: {
   activeSection: string;
   onSectionChange: (section: string) => void;
   onDashboardClick?: () => void;
+  onVaultClick?: () => void;
 }) {
   return (
     <aside className="bg-neutral-900 flex flex-col gap-3 items-center p-4 w-24 h-screen">
@@ -282,6 +284,12 @@ function IconNavigation({
           onClick={onDashboardClick}
         >
           <Dashboard size={24} />
+        </IconNavButton>
+        <IconNavButton
+          label="Vault"
+          onClick={onVaultClick}
+        >
+          <FolderOpen size={24} />
         </IconNavButton>
       </div>
 
@@ -564,6 +572,7 @@ interface TwoLevelSidebarProps {
   onNewChat: () => void;
   onDeleteChat: (id: string) => void;
   onDashboardClick?: () => void;
+  onVaultClick?: () => void;
   hideIconNav?: boolean;
 }
 
@@ -574,6 +583,7 @@ export function TwoLevelSidebar({
   onNewChat, 
   onDeleteChat,
   onDashboardClick,
+  onVaultClick,
   hideIconNav = false
 }: TwoLevelSidebarProps) {
   const [activeSection, setActiveSection] = useState("chats");
@@ -586,6 +596,7 @@ export function TwoLevelSidebar({
           activeSection={activeSection} 
           onSectionChange={setActiveSection}
           onDashboardClick={onDashboardClick}
+          onVaultClick={onVaultClick}
         />
       )}
       <DetailSidebar 

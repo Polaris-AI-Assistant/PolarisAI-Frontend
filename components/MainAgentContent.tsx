@@ -66,6 +66,7 @@ import { MeetingCard } from '@/components/ui/meeting-card';
 import { FlightResultsInline, FlightData } from '@/components/ui/flight-results-card';
 import { TimelineContainer, TimelineEvent, TimelineEventType } from '@/components/Timeline';
 import { MarkdownContent } from '@/components/ui/MarkdownContent';
+import { FileGenerationPanel } from '@/components/ui/FileGenerationPanel';
 import { useVoiceInput, getBaseLanguageName } from '@/hooks/useVoiceInput';
 import { useTTS } from '@/hooks/useTTS';
 
@@ -3195,6 +3196,20 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                       >
                         <MarkdownContent content={message.content} />
                       </div>
+                      
+                      {/* File Generation Panel for exporting content */}
+                      <FileGenerationPanel 
+                        content={message.content}
+                        isMarkdown={true}
+                        title={`export-${message.id?.substring(0, 8) || 'message'}`}
+                        userId={localStorage.getItem('userId') || undefined}
+                        onSuccess={(url, filename) => {
+                          console.log(`File ready for download: ${filename}`);
+                        }}
+                        onError={(error) => {
+                          console.error('File generation error:', error);
+                        }}
+                      />
                       
                       <div className="mt-3 pt-3 border-t border-neutral-800/30 flex items-center justify-between text-xs">
                         <div className="flex items-center gap-3">
