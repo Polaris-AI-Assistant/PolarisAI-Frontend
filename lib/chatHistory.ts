@@ -37,6 +37,14 @@ export interface ChatMessage {
     actionType: string;
     description: string;
   };
+  // File generation properties
+  fileGeneration?: {
+    type: 'pdf' | 'txt';
+    filename: string;
+    fileUrl: string;
+    fileSize?: number;
+    expiresIn?: number;
+  };
 }
 
 export interface ChatSession {

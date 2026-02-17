@@ -67,6 +67,7 @@ import { FlightResultsInline, FlightData } from '@/components/ui/flight-results-
 import { TimelineContainer, TimelineEvent, TimelineEventType } from '@/components/Timeline';
 import { MarkdownContent } from '@/components/ui/MarkdownContent';
 import { FileGenerationPanel } from '@/components/ui/FileGenerationPanel';
+import { detectFileGenerationRequest } from '@/lib/fileGeneration';
 import { useVoiceInput, getBaseLanguageName } from '@/hooks/useVoiceInput';
 import { useTTS } from '@/hooks/useTTS';
 
@@ -1389,6 +1390,10 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
   // Voice input and multi-language state
   const [voiceLanguage, setVoiceLanguage] = useState('en-US');
 
+  // File generation request tracking - track which message should get file generation
+  const [lastUserQuery, setLastUserQuery] = useState('');
+  const [messageFileGenerationMap, setMessageFileGenerationMap] = useState<Record<string, 'pdf' | 'txt'>>({});
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const streamingContentRef = useRef<string>('');
@@ -1602,7 +1607,28 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
 
     try {
       isSavingRef.current = true;
-      const result = await updateChatSession(currentChatId, validMessages);
+      // Convert fileGeneration to files format for database persistence
+      const messagesWithFiles = validMessages.map(msg => {
+        if (msg.fileGeneration && !msg.files) {
+          return {
+            ...msg,
+            files: [
+              {
+                id: `${msg.id}-file-${Date.now()}`,
+                filename: msg.fileGeneration.filename,
+                originalFilename: msg.fileGeneration.filename,
+                mimeType: msg.fileGeneration.type === 'pdf' ? 'application/pdf' : 'text/plain',
+                size: msg.fileGeneration.fileSize || 0,
+                url: msg.fileGeneration.fileUrl,
+                fileType: msg.fileGeneration.type === 'pdf' ? 'document' : 'other' as const,
+              }
+            ],
+          };
+        }
+        return msg;
+      });
+
+      const result = await updateChatSession(currentChatId, messagesWithFiles);
       if (result) {
         await loadChatHistory();
       }
@@ -1719,6 +1745,10 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     
     if (!query || isLoading) return;
 
+    // Detect if user is asking for file generation
+    const { fileType, isExplicit } = detectFileGenerationRequest(query);
+    setLastUserQuery(query);
+
     // Stop voice input if recording
     if (voiceInput.isListening) {
       voiceInput.stopListening();
@@ -1818,6 +1848,23 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     setStreamingMessageId(assistantMessageId);
     streamingContentRef.current = '';
     metadataRef.current = {};
+    
+    // Store file generation request for this specific message
+    const { fileType: detectedFileType, isExplicit: isExplicitFileGen } = detectFileGenerationRequest(lastUserQuery);
+    console.log('[MainAgentContent] File generation detection:', {
+      query: lastUserQuery,
+      isExplicit: isExplicitFileGen,
+      detectedFileType,
+      messageId: assistantMessageId,
+    });
+    
+    if (isExplicitFileGen && detectedFileType) {
+      console.log(`[MainAgentContent] Setting up file generation for message ${assistantMessageId}:`, detectedFileType);
+      setMessageFileGenerationMap(prev => ({
+        ...prev,
+        [assistantMessageId]: detectedFileType
+      }));
+    }
     
     const assistantMessage: ChatMessage = {
       id: assistantMessageId,
@@ -2189,7 +2236,54 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             };
             setTimelineEvents((prev) => [...prev, timelineEvent]);
             break;
-            
+          
+          case 'file_generated':
+            console.log('[FileGeneration] 📄 File generated event received:', chunk);
+            // File was successfully generated - store the file information
+            // This will be used to trigger file download or display in the FileGenerationPanel
+            if (assistantMessageId && chunk.fileType && chunk.fileUrl && chunk.filename) {
+              const fileInfo = {
+                type: chunk.fileType as 'pdf' | 'txt',
+                filename: chunk.filename,
+                fileUrl: chunk.fileUrl,
+                fileSize: chunk.fileSize,
+                expiresIn: chunk.expiresIn,
+              };
+              console.log(`[FileGeneration] ✅ ${chunk.fileType.toUpperCase()} generated: ${chunk.filename}`);
+              console.log(`[FileGeneration] Download URL: ${chunk.fileUrl}`);
+              console.log(`[FileGeneration] Setting file info for message: ${assistantMessageId}`);
+              
+              // Update the message with file generation info
+              setMessages((prev) => {
+                const updated = prev.map((m) => {
+                  if (m.id === assistantMessageId) {
+                    console.log('[FileGeneration] 📌 Updating message', assistantMessageId, 'with file generation info');
+                    return { ...m, fileGeneration: fileInfo };
+                  }
+                  return m;
+                });
+                return updated;
+              });
+            } else {
+              console.warn('[FileGeneration] ⚠️ Missing required fields for file generation:', {
+                assistantMessageId,
+                fileType: chunk.fileType,
+                fileUrl: chunk.fileUrl,
+                filename: chunk.filename
+              });
+            }
+            break;
+          
+          case 'file_generation_error':
+            console.error('[FileGeneration] ❌ Error:', chunk.message);
+            // File generation failed - log the error but don't fail the entire request
+            break;
+          
+          case 'memory_stored':
+            console.log('[Memory] ✅ Stored:', chunk.memoryId);
+            // Memory was stored successfully
+            break;
+          
           case 'error':
             throw new Error(chunk.error || chunk.message || 'Unknown error');
             
@@ -3198,18 +3292,110 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                       </div>
                       
                       {/* File Generation Panel for exporting content */}
-                      <FileGenerationPanel 
-                        content={message.content}
-                        isMarkdown={true}
-                        title={`export-${message.id?.substring(0, 8) || 'message'}`}
-                        userId={localStorage.getItem('userId') || undefined}
-                        onSuccess={(url, filename) => {
-                          console.log(`File ready for download: ${filename}`);
-                        }}
-                        onError={(error) => {
-                          console.error('File generation error:', error);
-                        }}
-                      />
+                      {messageFileGenerationMap[message.id] && (
+                        <FileGenerationPanel 
+                          content={message.content}
+                          isMarkdown={true}
+                          title={`export-${message.id?.substring(0, 8) || 'message'}`}
+                          userId={localStorage.getItem('userId') || undefined}
+                          requestedFileType={messageFileGenerationMap[message.id] || null}
+                          onSuccess={(url, filename) => {
+                            console.log(`File ready for download: ${filename}`);
+                            // Clear this message's file generation after success
+                            setMessageFileGenerationMap(prev => {
+                              const updated = { ...prev };
+                              delete updated[message.id];
+                              return updated;
+                            });
+                          }}
+                          onError={(error) => {
+                            console.error('File generation error:', error);
+                            // Clear this message's file generation on error
+                            setMessageFileGenerationMap(prev => {
+                              const updated = { ...prev };
+                              delete updated[message.id];
+                              return updated;
+                            });
+                          }}
+                        />
+                      )}
+
+                      {/* Display generated file information */}
+                      {message.fileGeneration && (
+                        <div className="flex flex-col gap-3 mt-4 p-4 bg-gradient-to-r from-green-900/20 to-green-800/20 rounded-lg border border-green-700/50">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              <span className="text-sm font-medium text-green-200">
+                                {message.fileGeneration.filename}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                // Create a temporary link and click it to trigger download
+                                const link = document.createElement('a');
+                                link.href = message.fileGeneration.fileUrl;
+                                link.download = message.fileGeneration.filename || 'download';
+                                link.style.display = 'none';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                              }}
+                              className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors"
+                            >
+                              Download {message.fileGeneration.type.toUpperCase()}
+                            </button>
+                          </div>
+                          {message.fileGeneration.fileSize && (
+                            <div className="text-xs text-green-300">
+                              Size: {(message.fileGeneration.fileSize / 1024).toFixed(2)} KB • Expires in {message.fileGeneration.expiresIn} seconds
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Display persisted files from database */}
+                      {message.files && message.files.length > 0 && (
+                        <div className="flex flex-col gap-2 mt-4">
+                          {message.files.map((file, idx) => (
+                            <div key={idx} className="flex flex-col gap-3 p-4 bg-gradient-to-r from-blue-900/20 to-blue-800/20 rounded-lg border border-blue-700/50">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-blue-200">
+                                    {file.filename}
+                                  </span>
+                                </div>
+                                {file.url && (
+                                  <button
+                                    onClick={() => {
+                                      const link = document.createElement('a');
+                                      link.href = file.url!;
+                                      link.download = file.filename || 'download';
+                                      link.style.display = 'none';
+                                      document.body.appendChild(link);
+                                      link.click();
+                                      document.body.removeChild(link);
+                                    }}
+                                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors"
+                                  >
+                                    Download
+                                  </button>
+                                )}
+                              </div>
+                              {file.size && (
+                                <div className="text-xs text-blue-300">
+                                  Size: {(file.size / 1024).toFixed(2)} KB
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       
                       <div className="mt-3 pt-3 border-t border-neutral-800/30 flex items-center justify-between text-xs">
                         <div className="flex items-center gap-3">

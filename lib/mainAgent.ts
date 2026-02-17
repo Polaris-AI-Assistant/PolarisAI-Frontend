@@ -280,7 +280,9 @@ export interface StreamChunk {
     // Confirmation
     | 'timeline_confirmation_required' | 'timeline_confirmation_received' 
     // Completion
-    | 'timeline_task_completed' | 'timeline_task_failed';
+    | 'timeline_task_completed' | 'timeline_task_failed'
+    // File generation
+    | 'file_generated' | 'file_generation_error' | 'memory_stored';
   status?: 'start' | 'stop';
   message?: string;
   agents?: string[];
@@ -319,6 +321,14 @@ export interface StreamChunk {
   data?: any;
   summary?: string;
   needsClarification?: boolean;
+  // File generation fields
+  fileType?: 'pdf' | 'txt';
+  filename?: string;
+  fileUrl?: string;
+  fileSize?: number;
+  expiresIn?: number;
+  memoryId?: string;
+  memoryType?: string;
 }
 
 /**

@@ -40,6 +40,8 @@ export interface ChatMessageRow {
   is_confirmed: boolean;
   is_canceled: boolean;
   confirmation_data: any | null;
+  files: any[] | null;
+  sequence_order: number | null;
 }
 
 export interface ChatSessionRow {
@@ -65,5 +67,7 @@ export function rowToChatMessage(row: ChatMessageRow) {
     isConfirmed: row.is_confirmed,
     isCanceled: row.is_canceled,
     confirmationData: row.confirmation_data || undefined,
+    files: row.files || undefined,
+    sequenceOrder: row.sequence_order || undefined,
   };
 }

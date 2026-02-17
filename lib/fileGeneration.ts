@@ -271,3 +271,57 @@ export function sanitizeFilename(filename: string): string {
     .replace(/_{2,}/g, '_')
     .substring(0, 255);
 }
+
+/**
+ * Detect if a query is asking for file generation
+ * @param query - User's query string
+ * @returns Object with fileType ('pdf' | 'txt' | null) and isExplicit flag
+ */
+export function detectFileGenerationRequest(
+  query: string
+): { fileType: 'pdf' | 'txt' | null; isExplicit: boolean } {
+  if (!query) return { fileType: null, isExplicit: false };
+
+  const lowerQuery = query.toLowerCase();
+
+  // Regex patterns for explicit file generation requests
+  const pdfPatterns = [
+    /generate\s+(?:a\s+)?pdf/i,
+    /export\s+(?:as\s+)?pdf/i,
+    /create\s+(?:a\s+)?pdf/i,
+    /make\s+(?:a\s+)?pdf/i,
+    /convert\s+(?:to\s+)?pdf/i,
+    /save\s+(?:as\s+)?pdf/i,
+    /download\s+(?:as\s+)?pdf/i,
+    /in\s+(?:a\s+)?pdf/i,  // Added: "in a pdf" or "in pdf"
+    /in\s+pdf\s+(?:format|file)/i,  // Added: "in pdf format" or "in pdf file"
+    /as\s+(?:a\s+)?pdf/i,  // Added: "as pdf"
+    /\bpdf\b.*(?:file|document|export|generate|create|download|format)/i,
+    /(?:file|document|export|generate|create|download)\s+.*pdf/i,  // Added: "create ... pdf"
+  ];
+
+  const txtPatterns = [
+    /generate\s+(?:a\s+)?(?:text|txt)\s+file/i,
+    /export\s+(?:as\s+)?(?:text|txt)/i,
+    /create\s+(?:a\s+)?(?:text|txt)\s+file/i,
+    /make\s+(?:a\s+)?(?:text|txt)\s+file/i,
+    /convert\s+(?:to\s+)?(?:text|txt)/i,
+    /save\s+(?:as\s+)?(?:text|txt)/i,
+    /download\s+(?:as\s+)?(?:text|txt)/i,
+    /in\s+(?:a\s+)?(?:text|txt)\s+(?:file|format)/i,  // Added: "in a text file"
+    /as\s+(?:a\s+)?(?:text|txt)/i,  // Added: "as text"
+    /\b(?:text|txt)\b.*(?:file|export|generate|create|download|format)/i,
+  ];
+
+  // Check for PDF request
+  if (pdfPatterns.some(pattern => pattern.test(query))) {
+    return { fileType: 'pdf', isExplicit: true };
+  }
+
+  // Check for TXT request
+  if (txtPatterns.some(pattern => pattern.test(query))) {
+    return { fileType: 'txt', isExplicit: true };
+  }
+
+  return { fileType: null, isExplicit: false };
+}

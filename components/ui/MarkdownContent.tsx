@@ -55,29 +55,77 @@ const MarkdownContent = memo(function MarkdownContent({ content }: MarkdownConte
     li: ({ children }) => <li className="markdown-li">{children}</li>,
 
     // ---------- Links ----------
-    a: ({ href, children }) => (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="markdown-link"
-      >
-        {children}
-        <svg
-          className="inline-block w-3 h-3 ml-1 mb-0.5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+    a: ({ href, children }) => {
+      // Handle download links (from file generation service)
+      const isDownloadLink = href && (
+        href.includes('supabase') && 
+        (href.includes('generated-files') || href.includes('download'))
+      );
+
+      if (isDownloadLink) {
+        console.log('[MarkdownContent] Download link detected:', href);
+        return (
+          <a
+            href={href}
+            download
+            className="markdown-link"
+            onClick={(e) => {
+              console.log('[MarkdownContent] Download click handler triggered');
+              e.preventDefault();
+              // Ensure download behavior instead of navigation
+              const link = document.createElement('a');
+              link.href = href;
+              link.download = true;
+              link.style.display = 'none';
+              document.body.appendChild(link);
+              console.log('[MarkdownContent] Clicking download link:', href);
+              link.click();
+              document.body.removeChild(link);
+            }}
+          >
+            {children}
+            <svg
+              className="inline-block w-3 h-3 ml-1 mb-0.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              />
+            </svg>
+          </a>
+        );
+      }
+
+      // Regular external links
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="markdown-link"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-          />
-        </svg>
-      </a>
-    ),
+          {children}
+          <svg
+            className="inline-block w-3 h-3 ml-1 mb-0.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+            />
+          </svg>
+        </a>
+      );
+    },
 
     // ---------- Blockquote ----------
     blockquote: ({ children }) => (
