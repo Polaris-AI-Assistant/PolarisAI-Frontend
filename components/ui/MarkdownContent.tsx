@@ -75,7 +75,7 @@ const MarkdownContent = memo(function MarkdownContent({ content }: MarkdownConte
               // Ensure download behavior instead of navigation
               const link = document.createElement('a');
               link.href = href;
-              link.download = true;
+              link.download = '';
               link.style.display = 'none';
               document.body.appendChild(link);
               console.log('[MarkdownContent] Clicking download link:', href);

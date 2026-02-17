@@ -430,7 +430,9 @@ function AccountTab() {
     try {
       const userData = await getCurrentUser();
       setUser(userData);
-      setDisplayName(userData?.user_metadata?.display_name || userData?.email?.split('@')[0] || '');
+      // user_metadata is not in User type, so check with type assertion or fallback
+      const userMeta = (userData as any)?.user_metadata;
+      setDisplayName(userMeta?.display_name || userData?.email?.split('@')[0] || '');
     } catch (err) {
       console.error('Error fetching user:', err);
     }

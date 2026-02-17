@@ -1628,7 +1628,23 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
         return msg;
       });
 
-      const result = await updateChatSession(currentChatId, messagesWithFiles);
+      // Map fileType to allowed union type and ensure correct typing
+      const allowedFileTypes = ["audio", "image", "document", "video", "other"] as const;
+      const fixedMessagesWithFiles: ChatMessage[] = messagesWithFiles.map((msg) => {
+        if (msg && Array.isArray(msg.files)) {
+          return {
+            ...msg,
+            files: msg.files.map((file) => ({
+              ...file,
+              fileType: allowedFileTypes.includes(file.fileType as any)
+                ? (file.fileType as typeof allowedFileTypes[number])
+                : "other",
+            })),
+          };
+        }
+        return msg as ChatMessage;
+      });
+      const result = await updateChatSession(currentChatId, fixedMessagesWithFiles);
       if (result) {
         await loadChatHistory();
       }
@@ -3336,8 +3352,8 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                               onClick={() => {
                                 // Create a temporary link and click it to trigger download
                                 const link = document.createElement('a');
-                                link.href = message.fileGeneration.fileUrl;
-                                link.download = message.fileGeneration.filename || 'download';
+                                link.href = message.fileGeneration?.fileUrl || '';
+                                link.download = message.fileGeneration?.filename || 'download';
                                 link.style.display = 'none';
                                 document.body.appendChild(link);
                                 link.click();
@@ -3345,12 +3361,12 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                               }}
                               className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors"
                             >
-                              Download {message.fileGeneration.type.toUpperCase()}
+                              Download {message.fileGeneration?.type?.toUpperCase?.() || ''}
                             </button>
                           </div>
-                          {message.fileGeneration.fileSize && (
+                          {message.fileGeneration?.fileSize && (
                             <div className="text-xs text-green-300">
-                              Size: {(message.fileGeneration.fileSize / 1024).toFixed(2)} KB • Expires in {message.fileGeneration.expiresIn} seconds
+                              Size: {(message.fileGeneration.fileSize / 1024).toFixed(2)} KB • Expires in {message.fileGeneration?.expiresIn ?? 0} seconds
                             </div>
                           )}
                         </div>
