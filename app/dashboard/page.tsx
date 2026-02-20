@@ -32,6 +32,8 @@ import {
   updateConnectionStatusCache,
 } from '../../lib/cachedConnections'
 import { useCacheStore } from '../../lib/stores/cacheStore'
+import { useToast } from '@/contexts/ToastContext'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 // Small floating badge showing WebSocket connection status (for debugging)
 function SocketStatusBadge() {
@@ -63,9 +65,29 @@ function SocketStatusBadge() {
   );
 }
 
+// Map app keys to display names for connection toasts
+const APP_DISPLAY_NAMES: Record<string, string> = {
+  gmail: 'Gmail',
+  forms: 'Google Forms',
+  sheets: 'Google Sheets',
+  docs: 'Google Docs',
+  calendar: 'Google Calendar',
+  meet: 'Google Meet',
+  github: 'GitHub',
+  microsoft: 'Microsoft',
+  microsoft_outlook: 'Outlook',
+  microsoft_calendar: 'Microsoft Calendar',
+  microsoft_onedrive: 'OneDrive',
+  microsoft_excel: 'Excel',
+  microsoft_teams: 'Microsoft Teams',
+  microsoft_word: 'Microsoft Word',
+}
+
 function Dashboard() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { showToast } = useToast()
+  const { confirm: showConfirm } = useConfirm()
   const [activeTab, setActiveTab] = useState('Apps')
   const [user, setUser] = useState<User | null>(null)
   const [chatSearchQuery, setChatSearchQuery] = useState('')
@@ -240,9 +262,24 @@ function Dashboard() {
 
   // Handle tab from URL params
   useEffect(() => {
-    const tabFromUrl = searchParams.get('tab')
-    if (tabFromUrl === 'MainAgent') {
-      setActiveTab('MainAgent')
+    const tabFromUrl = searchParams.get('tab');
+    const chatIdFromUrl = searchParams.get('chatId');
+    const scheduleIdFromUrl = searchParams.get('scheduleId');
+    const taskIdFromUrl = searchParams.get('taskId');
+
+    if (chatIdFromUrl) {
+      setActiveTab('MainAgent');
+      setCurrentChatId(chatIdFromUrl);
+      return;
+    }
+
+    if (scheduleIdFromUrl || taskIdFromUrl) {
+      setActiveTab('Schedules');
+      return;
+    }
+
+    if (tabFromUrl && ['Apps', 'MainAgent', 'Schedules', 'Vault'].includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
     }
   }, [searchParams])
 
@@ -256,6 +293,12 @@ function Dashboard() {
     initialChatSetupDone.current = true
 
     const initializeChatHistory = async () => {
+      const urlChatId = searchParams.get('chatId');
+      if (urlChatId) {
+        setActiveTab('MainAgent');
+        setCurrentChatId(urlChatId);
+      }
+
       // First, try to set currentChatId from already loaded state (from cache)
       const cachedChats = [
         ...groupedChats.today,
@@ -266,7 +309,7 @@ function Dashboard() {
       ]
       
       // If we have cached chats, set the current chat ID immediately
-      if (cachedChats.length > 0 && !currentChatId) {
+      if (!urlChatId && cachedChats.length > 0 && !currentChatId) {
         const chatWithMessages = cachedChats.find(chat => chat.messageCount > 0)
         const emptyChat = cachedChats.find(chat => chat.messageCount === 0)
         
@@ -291,7 +334,8 @@ function Dashboard() {
       ]
       
       // Only update currentChatId if it's not set or invalid
-      if (!currentChatId || !allChats.find(c => c.id === currentChatId)) {
+      const selectedChatId = urlChatId || currentChatId;
+      if (!selectedChatId || !allChats.find(c => c.id === selectedChatId)) {
         const chatWithMessages = allChats.find(chat => chat.messageCount > 0)
         const emptyChat = allChats.find(chat => chat.messageCount === 0)
         
@@ -313,6 +357,9 @@ function Dashboard() {
             console.error('Error creating initial chat session:', error)
           }
         }
+      } else if (selectedChatId) {
+        // Ensure URL-selected chat stays selected once chats are loaded
+        setCurrentChatId(selectedChatId);
       }
     }
     
@@ -329,26 +376,32 @@ function Dashboard() {
     setUser(getStoredUser())
     
     // Check connection statuses using cache
-    const checkConnections = async () => {
+    const checkConnections = async (forceRefresh = false) => {
       try {
-        // First, try to load from cache for instant display
-        const cachedStatuses = useCacheStore.getState().getAllConnectionStatuses()
-        
-        if (cachedStatuses) {
-          // Apply cached statuses immediately for instant UI
-          if (cachedStatuses.gmail) setGmailStatus(cachedStatuses.gmail)
-          if (cachedStatuses.github) setGithubStatus(cachedStatuses.github)
-          if (cachedStatuses.forms) setFormsStatus(cachedStatuses.forms)
-          if (cachedStatuses.sheets) setSheetsStatus(cachedStatuses.sheets)
-          if (cachedStatuses.docs) setDocsStatus(cachedStatuses.docs)
-          if (cachedStatuses.calendar) setCalendarStatus(cachedStatuses.calendar)
-          if (cachedStatuses.meet) setMeetStatus(cachedStatuses.meet)
-          if (cachedStatuses.microsoft) setMicrosoftStatus(cachedStatuses.microsoft)
-          console.log('[Cache] Applied cached connection statuses')
+        // If force refresh (e.g. just returned from OAuth), invalidate cache first
+        if (forceRefresh) {
+          invalidateConnectionCache()
+        }
+
+        // First, try to load from cache for instant display (skip if force refresh)
+        if (!forceRefresh) {
+          const cachedStatuses = useCacheStore.getState().getAllConnectionStatuses()
+          if (cachedStatuses) {
+            // Apply cached statuses immediately for instant UI
+            if (cachedStatuses.gmail) setGmailStatus(cachedStatuses.gmail)
+            if (cachedStatuses.github) setGithubStatus(cachedStatuses.github)
+            if (cachedStatuses.forms) setFormsStatus(cachedStatuses.forms)
+            if (cachedStatuses.sheets) setSheetsStatus(cachedStatuses.sheets)
+            if (cachedStatuses.docs) setDocsStatus(cachedStatuses.docs)
+            if (cachedStatuses.calendar) setCalendarStatus(cachedStatuses.calendar)
+            if (cachedStatuses.meet) setMeetStatus(cachedStatuses.meet)
+            if (cachedStatuses.microsoft) setMicrosoftStatus(cachedStatuses.microsoft)
+            console.log('[Cache] Applied cached connection statuses')
+          }
         }
         
-        // Then fetch fresh data (will use cache if not stale)
-        const statuses = await getAllConnectionStatusesCached()
+        // Then fetch fresh data (force refresh bypasses cache when returning from OAuth)
+        const statuses = await getAllConnectionStatusesCached(forceRefresh)
         
         // Update state with fresh/validated data
         if (statuses.gmail) {
@@ -382,23 +435,19 @@ function Dashboard() {
       }
     }
     
-    // Check if we just came back from Docs OAuth
-    const docsConnected = localStorage.getItem('docs_connected')
-    // Check if we just came back from Microsoft OAuth
-    const microsoftConnected = localStorage.getItem('microsoft_connected')
+    // Check if we just came back from any app OAuth - force refresh so card shows "Connected"
+    const CONNECTION_FLAGS = [
+      'docs_connected', 'microsoft_connected', 'gmail_connected', 'forms_connected',
+      'sheets_connected', 'meet_connected', 'calendar_connected', 'github_connected'
+    ] as const
+    const justConnected = CONNECTION_FLAGS.some(key => localStorage.getItem(key) === 'true')
     
-    if (docsConnected === 'true') {
-      console.log('Detected Docs connection, refreshing status...')
-      localStorage.removeItem('docs_connected')
-      // Add a small delay to ensure DB write is complete
+    if (justConnected) {
+      CONNECTION_FLAGS.forEach(key => localStorage.removeItem(key))
+      console.log('Detected app connection, forcing refresh...')
+      // Small delay to ensure backend DB write is complete
       setTimeout(() => {
-        checkConnections()
-      }, 500)
-    } else if (microsoftConnected === 'true') {
-      console.log('Detected Microsoft connection, refreshing status...')
-      localStorage.removeItem('microsoft_connected')
-      setTimeout(() => {
-        checkConnections()
+        checkConnections(true)
       }, 500)
     } else {
       checkConnections()
@@ -417,6 +466,56 @@ function Dashboard() {
     }
   }, [])
 
+  // Show connection toasts from OAuth callback redirect (top-center, theme-matched)
+  const lastConnectToastRef = useRef<string | null>(null)
+  useEffect(() => {
+    const connectSuccess = searchParams.get('connectSuccess')
+    const connectError = searchParams.get('connectError')
+    const connectErrorMsg = searchParams.get('connectErrorMsg')
+
+    const key = connectSuccess ? `success:${connectSuccess}` : connectError ? `error:${connectError}` : null
+    if (!key) {
+      lastConnectToastRef.current = null
+      return
+    }
+    // Dedupe: avoid showing same toast twice (e.g. React Strict Mode)
+    if (lastConnectToastRef.current === key) return
+    lastConnectToastRef.current = key
+
+    if (connectSuccess) {
+      const appName = APP_DISPLAY_NAMES[connectSuccess] || connectSuccess
+      showToast({
+        title: 'Success!',
+        message: `${appName} connected successfully.`,
+        variant: 'success',
+        position: 'top-center',
+        duration: 4000,
+      })
+    } else if (connectError) {
+      const appName = APP_DISPLAY_NAMES[connectError] || connectError
+      const msg = connectErrorMsg ? decodeURIComponent(connectErrorMsg) : 'Connection failed. Please try again.'
+      showToast({
+        title: 'Connection failed',
+        message: `${appName}: ${msg}`,
+        variant: 'error',
+        position: 'top-center',
+        duration: 5000,
+      })
+    }
+
+    // Clear URL params
+    const url = new URL(window.location.href)
+    url.searchParams.delete('connectSuccess')
+    url.searchParams.delete('connectError')
+    url.searchParams.delete('connectErrorMsg')
+    router.replace(url.pathname + url.search)
+  }, [searchParams, router, showToast])
+
+  // Helper for connection toasts (top-center)
+  const toastConnection = useCallback((variant: 'success' | 'error', title: string, message: string) => {
+    showToast({ title, message, variant, position: 'top-center', duration: variant === 'error' ? 5000 : 4000 })
+  }, [showToast])
+
   // Handle Gmail connection
   const handleGmailConnect = async () => {
     if (gmailStatus.connected) {
@@ -429,7 +528,7 @@ function Dashboard() {
       await connectGmail()
     } catch (error) {
       console.error('Error connecting Gmail:', error)
-      alert('Failed to connect Gmail. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect Gmail. Please try again.')
       setIsConnecting(false)
     }
   }
@@ -440,7 +539,12 @@ function Dashboard() {
       return
     }
 
-    if (confirm('Are you sure you want to disconnect Gmail?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect Gmail?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectGmail()
         if (result.success) {
@@ -448,13 +552,13 @@ function Dashboard() {
           setGmailStats(null)
           // Update cache
           updateConnectionStatusCache('gmail', { connected: false })
-          alert('Gmail disconnected successfully')
+          toastConnection('success', 'Success', 'Gmail disconnected successfully')
         } else {
-          alert(result.error || 'Failed to disconnect Gmail')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect Gmail')
         }
       } catch (error) {
         console.error('Error disconnecting Gmail:', error)
-        alert('Failed to disconnect Gmail. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect Gmail. Please try again.')
       }
     }
   }
@@ -472,7 +576,7 @@ function Dashboard() {
       // Note: setIsGithubConnecting(false) will be handled after redirect back
     } catch (error) {
       console.error('Error connecting GitHub:', error)
-      alert('Failed to connect GitHub. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect GitHub. Please try again.')
       setIsGithubConnecting(false)
     }
   }
@@ -483,7 +587,12 @@ function Dashboard() {
       return
     }
 
-    if (confirm('Are you sure you want to disconnect GitHub?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect GitHub?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectGitHub()
         if (result.success) {
@@ -491,13 +600,13 @@ function Dashboard() {
           setGithubStats(null)
           // Update cache
           updateConnectionStatusCache('github', { connected: false })
-          alert('GitHub disconnected successfully')
+          toastConnection('success', 'Success', 'GitHub disconnected successfully')
         } else {
-          alert(result.error || 'Failed to disconnect GitHub')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect GitHub')
         }
       } catch (error) {
         console.error('Error disconnecting GitHub:', error)
-        alert('Failed to disconnect GitHub. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect GitHub. Please try again.')
       }
     }
   }
@@ -512,7 +621,7 @@ function Dashboard() {
       await connectForms()
     } catch (error) {
       console.error('Error connecting Forms:', error)
-      alert('Failed to connect Google Forms. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect Google Forms. Please try again.')
     }
   }
 
@@ -522,20 +631,25 @@ function Dashboard() {
       return
     }
 
-    if (confirm('Are you sure you want to disconnect Google Forms?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect Google Forms?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectForms()
         if (result.success) {
           setFormsStatus({ connected: false })
           // Update cache
           updateConnectionStatusCache('forms', { connected: false })
-          alert('Google Forms disconnected successfully')
+          toastConnection('success', 'Success', 'Google Forms disconnected successfully')
         } else {
-          alert(result.error || 'Failed to disconnect Google Forms')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect Google Forms')
         }
       } catch (error) {
         console.error('Error disconnecting Forms:', error)
-        alert('Failed to disconnect Google Forms. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect Google Forms. Please try again.')
       }
     }
   }
@@ -550,7 +664,7 @@ function Dashboard() {
       await connectSheets()
     } catch (error) {
       console.error('Error connecting Sheets:', error)
-      alert('Failed to connect Google Sheets. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect Google Sheets. Please try again.')
     }
   }
 
@@ -560,18 +674,23 @@ function Dashboard() {
       return
     }
 
-    if (confirm('Are you sure you want to disconnect Google Sheets?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect Google Sheets?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectSheets()
         if (result.success) {
           setSheetsStatus({ connected: false })
-          alert('Google Sheets disconnected successfully')
+          toastConnection('success', 'Success', 'Google Sheets disconnected successfully')
         } else {
-          alert(result.error || 'Failed to disconnect Google Sheets')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect Google Sheets')
         }
       } catch (error) {
         console.error('Error disconnecting Sheets:', error)
-        alert('Failed to disconnect Google Sheets. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect Google Sheets. Please try again.')
       }
     }
     await refreshConnectionStatus()
@@ -587,7 +706,7 @@ function Dashboard() {
       await connectDocs()
     } catch (error) {
       console.error('Error connecting Docs:', error)
-      alert('Failed to connect Google Docs. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect Google Docs. Please try again.')
     }
   }
 
@@ -597,18 +716,23 @@ function Dashboard() {
       return
     }
 
-    if (confirm('Are you sure you want to disconnect Google Docs?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect Google Docs?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectDocs()
         if (result.success) {
           setDocsStatus({ connected: false, email: null })
-          alert('Google Docs disconnected successfully')
+          toastConnection('success', 'Success', 'Google Docs disconnected successfully')
         } else {
-          alert('Failed to disconnect Google Docs')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect Google Docs')
         }
       } catch (error) {
         console.error('Error disconnecting Docs:', error)
-        alert('Failed to disconnect Google Docs. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect Google Docs. Please try again.')
       }
     }
   }
@@ -626,7 +750,7 @@ function Dashboard() {
       await connectCalendar()
     } catch (error) {
       console.error('Error connecting Calendar:', error)
-      alert('Failed to connect Calendar. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect Calendar. Please try again.')
     }
   }
 
@@ -636,18 +760,23 @@ function Dashboard() {
       return
     }
 
-    if (confirm('Are you sure you want to disconnect Google Calendar?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect Google Calendar?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectCalendar()
         if (result.success) {
           setCalendarStatus({ connected: false })
-          alert('Google Calendar disconnected successfully')
+          toastConnection('success', 'Success', 'Google Calendar disconnected successfully')
         } else {
-          alert(result.error || 'Failed to disconnect Google Calendar')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect Google Calendar')
         }
       } catch (error) {
         console.error('Error disconnecting Calendar:', error)
-        alert('Failed to disconnect Google Calendar. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect Google Calendar. Please try again.')
       }
     }
   }
@@ -662,7 +791,7 @@ function Dashboard() {
       await connectMeet()
     } catch (error) {
       console.error('Error connecting Meet:', error)
-      alert('Failed to connect Google Meet. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect Google Meet. Please try again.')
     }
   }
 
@@ -672,18 +801,23 @@ function Dashboard() {
       return
     }
 
-    if (confirm('Are you sure you want to disconnect Google Meet?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect Google Meet?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectMeet()
         if (result.success) {
           setMeetStatus({ connected: false })
-          alert('Google Meet disconnected successfully')
+          toastConnection('success', 'Success', 'Google Meet disconnected successfully')
         } else {
-          alert(result.error || 'Failed to disconnect Google Meet')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect Google Meet')
         }
       } catch (error) {
         console.error('Error disconnecting Meet:', error)
-        alert('Failed to disconnect Google Meet. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect Google Meet. Please try again.')
       }
     }
   }
@@ -697,7 +831,7 @@ function Dashboard() {
       await connectMicrosoftApp('outlook')
     } catch (error) {
       console.error('Error connecting Outlook:', error)
-      alert('Failed to connect Outlook. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect Outlook. Please try again.')
     }
   }
 
@@ -706,7 +840,12 @@ function Dashboard() {
     if (!microsoftStatus.apps?.outlook) {
       return
     }
-    if (confirm('Are you sure you want to disconnect Outlook?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect Outlook?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectMicrosoftApp('outlook')
         if (result.success) {
@@ -714,13 +853,13 @@ function Dashboard() {
             ...prev,
             apps: { ...prev.apps, outlook: false }
           }))
-          alert('Outlook disconnected successfully')
+          toastConnection('success', 'Success', 'Outlook disconnected successfully')
         } else {
-          alert(result.error || 'Failed to disconnect Outlook')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect Outlook')
         }
       } catch (error) {
         console.error('Error disconnecting Outlook:', error)
-        alert('Failed to disconnect Outlook. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect Outlook. Please try again.')
       }
     }
   }
@@ -734,7 +873,7 @@ function Dashboard() {
       await connectMicrosoftApp('calendar')
     } catch (error) {
       console.error('Error connecting Microsoft Calendar:', error)
-      alert('Failed to connect Microsoft Calendar. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect Microsoft Calendar. Please try again.')
     }
   }
 
@@ -743,7 +882,12 @@ function Dashboard() {
     if (!microsoftStatus.apps?.calendar) {
       return
     }
-    if (confirm('Are you sure you want to disconnect Microsoft Calendar?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect Microsoft Calendar?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectMicrosoftApp('calendar')
         if (result.success) {
@@ -751,13 +895,13 @@ function Dashboard() {
             ...prev,
             apps: { ...prev.apps, calendar: false }
           }))
-          alert('Microsoft Calendar disconnected successfully')
+          toastConnection('success', 'Success', 'Microsoft Calendar disconnected successfully')
         } else {
-          alert(result.error || 'Failed to disconnect Microsoft Calendar')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect Microsoft Calendar')
         }
       } catch (error) {
         console.error('Error disconnecting Microsoft Calendar:', error)
-        alert('Failed to disconnect Microsoft Calendar. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect Microsoft Calendar. Please try again.')
       }
     }
   }
@@ -771,7 +915,7 @@ function Dashboard() {
       await connectMicrosoftApp('onedrive')
     } catch (error) {
       console.error('Error connecting OneDrive:', error)
-      alert('Failed to connect OneDrive. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect OneDrive. Please try again.')
     }
   }
 
@@ -780,7 +924,12 @@ function Dashboard() {
     if (!microsoftStatus.apps?.onedrive) {
       return
     }
-    if (confirm('Are you sure you want to disconnect OneDrive?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect OneDrive?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectMicrosoftApp('onedrive')
         if (result.success) {
@@ -788,13 +937,13 @@ function Dashboard() {
             ...prev,
             apps: { ...prev.apps, onedrive: false }
           }))
-          alert('OneDrive disconnected successfully')
+          toastConnection('success', 'Success', 'OneDrive disconnected successfully')
         } else {
-          alert(result.error || 'Failed to disconnect OneDrive')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect OneDrive')
         }
       } catch (error) {
         console.error('Error disconnecting OneDrive:', error)
-        alert('Failed to disconnect OneDrive. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect OneDrive. Please try again.')
       }
     }
   }
@@ -808,7 +957,7 @@ function Dashboard() {
       await connectMicrosoftApp('excel')
     } catch (error) {
       console.error('Error connecting Excel:', error)
-      alert('Failed to connect Excel. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect Excel. Please try again.')
     }
   }
 
@@ -817,7 +966,12 @@ function Dashboard() {
     if (!microsoftStatus.apps?.excel) {
       return
     }
-    if (confirm('Are you sure you want to disconnect Excel?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect Excel?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectMicrosoftApp('excel')
         if (result.success) {
@@ -825,13 +979,13 @@ function Dashboard() {
             ...prev,
             apps: { ...prev.apps, excel: false }
           }))
-          alert('Excel disconnected successfully')
+          toastConnection('success', 'Success', 'Excel disconnected successfully')
         } else {
-          alert(result.error || 'Failed to disconnect Excel')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect Excel')
         }
       } catch (error) {
         console.error('Error disconnecting Excel:', error)
-        alert('Failed to disconnect Excel. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect Excel. Please try again.')
       }
     }
   }
@@ -845,7 +999,7 @@ function Dashboard() {
       await connectMicrosoftApp('teams')
     } catch (error) {
       console.error('Error connecting Teams:', error)
-      alert('Failed to connect Teams. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect Teams. Please try again.')
     }
   }
 
@@ -854,7 +1008,12 @@ function Dashboard() {
     if (!microsoftStatus.apps?.teams) {
       return
     }
-    if (confirm('Are you sure you want to disconnect Microsoft Teams?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect Microsoft Teams?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectMicrosoftApp('teams')
         if (result.success) {
@@ -862,13 +1021,13 @@ function Dashboard() {
             ...prev,
             apps: { ...prev.apps, teams: false }
           }))
-          alert('Microsoft Teams disconnected successfully')
+          toastConnection('success', 'Success', 'Microsoft Teams disconnected successfully')
         } else {
-          alert(result.error || 'Failed to disconnect Teams')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect Teams')
         }
       } catch (error) {
         console.error('Error disconnecting Teams:', error)
-        alert('Failed to disconnect Teams. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect Teams. Please try again.')
       }
     }
   }
@@ -882,7 +1041,7 @@ function Dashboard() {
       await connectMicrosoftApp('word')
     } catch (error) {
       console.error('Error connecting Word:', error)
-      alert('Failed to connect Word. Please try again.')
+      toastConnection('error', 'Connection failed', 'Failed to connect Word. Please try again.')
     }
   }
 
@@ -891,7 +1050,12 @@ function Dashboard() {
     if (!microsoftStatus.apps?.word) {
       return
     }
-    if (confirm('Are you sure you want to disconnect Microsoft Word?')) {
+    const confirmed = await showConfirm({
+      message: 'Are you sure you want to disconnect Microsoft Word?',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    })
+    if (confirmed) {
       try {
         const result = await disconnectMicrosoftApp('word')
         if (result.success) {
@@ -899,13 +1063,13 @@ function Dashboard() {
             ...prev,
             apps: { ...prev.apps, word: false }
           }))
-          alert('Microsoft Word disconnected successfully')
+          toastConnection('success', 'Success', 'Microsoft Word disconnected successfully')
         } else {
-          alert(result.error || 'Failed to disconnect Word')
+          toastConnection('error', 'Error', result.error || 'Failed to disconnect Word')
         }
       } catch (error) {
         console.error('Error disconnecting Word:', error)
-        alert('Failed to disconnect Word. Please try again.')
+        toastConnection('error', 'Error', 'Failed to disconnect Word. Please try again.')
       }
     }
   }

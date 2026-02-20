@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SocketProvider } from "@/contexts/SocketContext";
+import { ToastProvider } from "@/contexts/ToastContext";
+import { ConfirmDialogProvider } from "@/components/ui/confirm-dialog";
 import SettingsModal from "@/components/settings/SettingsModal";
+import RealtimeToastBridge from "@/components/RealtimeToastBridge";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -19,8 +22,13 @@ export default function RootLayout({
       <body className="antialiased">
         <SettingsProvider>
           <SocketProvider>
-            {children}
-            <SettingsModal />
+            <ToastProvider>
+              <ConfirmDialogProvider>
+                {children}
+                <RealtimeToastBridge />
+                <SettingsModal />
+              </ConfirmDialogProvider>
+            </ToastProvider>
           </SocketProvider>
         </SettingsProvider>
       </body>

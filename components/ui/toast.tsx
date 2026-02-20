@@ -32,13 +32,18 @@ interface ActionButton {
   variant?: 'default' | 'outline' | 'ghost';
 }
 
-interface ToasterProps {
+export interface ToasterProps {
   title?: string;
   message: string;
   variant?: Variant;
   duration?: number;
   position?: Position;
   actions?: ActionButton;
+  /**
+   * Optional click handler for the whole toast (e.g. open related chat/task).
+   * Note: dismiss/action buttons will stop propagation.
+   */
+  onClick?: () => void;
   onDismiss?: () => void;
   highlightTitle?: boolean;
 }
@@ -47,25 +52,34 @@ export interface ToasterRef {
   show: (props: ToasterProps) => void;
 }
 
+function isToastDebugEnabled() {
+  try {
+    return typeof window !== 'undefined' && window.localStorage.getItem('polaris_toast_debug') === '1';
+  } catch {
+    return false;
+  }
+}
+
 const variantStyles: Record<Variant, string> = {
-  default: 'bg-card border-border text-foreground',
-  success: 'bg-card border-green-600/50',
-  error: 'bg-card border-destructive/50',
-  warning: 'bg-card border-amber-600/50',
+  // Match dashboard theme (dark)
+  default: 'bg-[#171717] border-[#404040] text-white',
+  success: 'bg-[#171717] border-green-500/60 text-white',
+  error: 'bg-[#171717] border-red-500/60 text-white',
+  warning: 'bg-[#171717] border-amber-500/60 text-white',
 };
 
 const titleColor: Record<Variant, string> = {
-  default: 'text-foreground',
-  success: 'text-green-600 dark:text-green-400',
-  error: 'text-destructive',
-  warning: 'text-amber-600 dark:text-amber-400',
+  default: 'text-white',
+  success: 'text-green-400',
+  error: 'text-red-400',
+  warning: 'text-amber-400',
 };
 
 const iconColor: Record<Variant, string> = {
-  default: 'text-muted-foreground',
-  success: 'text-green-600 dark:text-green-400',
-  error: 'text-destructive',
-  warning: 'text-amber-600 dark:text-amber-400',
+  default: 'text-white/70',
+  success: 'text-green-400',
+  error: 'text-red-400',
+  warning: 'text-amber-400',
 };
 
 const variantIcons: Record<Variant, React.ComponentType<{ className?: string }>> = {
@@ -93,9 +107,14 @@ const Toaster = forwardRef<ToasterRef, { defaultPosition?: Position }>(
         duration = 4000,
         position = defaultPosition,
         actions,
+        onClick,
         onDismiss,
         highlightTitle,
       }) {
+        if (isToastDebugEnabled()) {
+          // eslint-disable-next-line no-console
+          console.debug('[ToastDebug] Toaster.show()', { title, message, variant, duration, position, hasOnClick: !!onClick });
+        }
         const Icon = variantIcons[variant];
 
         toastReference.current = sonnerToast.custom(
@@ -107,9 +126,22 @@ const Toaster = forwardRef<ToasterRef, { defaultPosition?: Position }>(
               exit="exit"
               transition={{ duration: 0.3, ease: 'easeOut' }}
               className={cn(
-                'flex items-center justify-between w-full max-w-xs p-3 rounded-xl border shadow-md',
-                variantStyles[variant]
+                // Slightly larger, dashboard-friendly toast
+                'flex items-center justify-between w-full max-w-sm p-4 rounded-2xl border shadow-lg',
+                variantStyles[variant],
+                onClick && 'cursor-pointer'
               )}
+              onClick={onClick}
+              role={onClick ? 'button' : undefined}
+              tabIndex={onClick ? 0 : undefined}
+              data-toast-variant={variant}
+              onKeyDown={(e) => {
+                if (!onClick) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onClick();
+                }
+              }}
             >
               <div className="flex items-start gap-2">
                 <Icon className={cn('h-4 w-4 mt-0.5 flex-shrink-0', iconColor[variant])} />
@@ -117,7 +149,7 @@ const Toaster = forwardRef<ToasterRef, { defaultPosition?: Position }>(
                   {title && (
                     <h3
                       className={cn(
-                        'text-xs font-medium leading-none',
+                        'text-sm font-semibold leading-none',
                         titleColor[variant],
                         highlightTitle && titleColor['success'] // override for meeting case
                       )}
@@ -125,7 +157,7 @@ const Toaster = forwardRef<ToasterRef, { defaultPosition?: Position }>(
                       {title}
                     </h3>
                   )}
-                  <p className="text-xs text-muted-foreground">{message}</p>
+                  <p className="text-sm text-white/70">{message}</p>
                 </div>
               </div>
 
@@ -134,7 +166,9 @@ const Toaster = forwardRef<ToasterRef, { defaultPosition?: Position }>(
                   <Button
                     variant={actions.variant || 'outline'}
                     size="sm"
-                    onClick={() => {
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
                       actions.onClick();
                       sonnerToast.dismiss(toastId);
                     }}
@@ -154,11 +188,13 @@ const Toaster = forwardRef<ToasterRef, { defaultPosition?: Position }>(
                 )}
 
                 <button
-                  onClick={() => {
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     sonnerToast.dismiss(toastId);
                     onDismiss?.();
                   }}
-                  className="rounded-full p-1 hover:bg-muted/50 dark:hover:bg-muted/30 transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="rounded-full p-1 hover:bg-muted/50 dark:hover:bg-muted/30 transition-colors focus:outline-none focus:ring-2 focus:ring-ring shrink-0"
                   aria-label="Dismiss notification"
                 >
                   <X className="h-3 w-3 text-muted-foreground" />

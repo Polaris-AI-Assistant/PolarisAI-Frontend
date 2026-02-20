@@ -5,6 +5,7 @@ import '@fontsource/inter/600.css';
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
+import { useToast } from '@/contexts/ToastContext';
 
 // Custom scrollbar styles
 const scrollbarStyles = `
@@ -1351,6 +1352,8 @@ interface MainAgentContentProps {
 
 export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentProps) {
   const router = useRouter();
+  const { showToast } = useToast();
+  const taskToastDedupRef = useRef<Set<string>>(new Set());
   const [currentChatId, setCurrentChatId] = useState<string | null>(chatId || null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -1419,6 +1422,27 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
 
   // TTS hook for reading assistant messages
   const tts = useTTS({ language: voiceLanguage });
+
+  // Strict language matching: respond ONLY in user's current message language.
+  // We still use the selected voice language as a hint for same-script languages (e.g., Devanagari).
+  const getResponseLanguageForQuery = (text: string): string => {
+    const trimmed = (text || '').trim();
+    if (!trimmed) return 'English';
+
+    // Basic script detection
+    const hasDevanagari = /[\u0900-\u097F]/.test(trimmed);
+    const hasLatin = /[A-Za-z]/.test(trimmed);
+
+    // If the user typed in English/Latin, force English.
+    if (hasLatin && !hasDevanagari) return 'English';
+
+    // If Devanagari is present, use the currently selected base language as the best guess
+    // (Marathi vs Hindi etc), otherwise fall back to English.
+    if (hasDevanagari) return getBaseLanguageName(voiceLanguage) || 'Hindi';
+
+    // Default fallback
+    return getBaseLanguageName(voiceLanguage) || 'English';
+  };
 
   useEffect(() => {
     return () => {
@@ -2184,6 +2208,18 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
           
           // Task completed - update ALL generating_response events to completed
           case 'timeline_task_completed':
+            // Debug: confirm we are receiving completion events
+            try {
+              // eslint-disable-next-line no-console
+              console.debug('[ToastDebug] SSE chunk timeline_task_completed', {
+                eventId: chunk.eventId,
+                status: chunk.status,
+                message: chunk.message,
+                summary: chunk.summary,
+                currentChatId,
+                assistantMessageId,
+              });
+            } catch (_) {}
             setTimelineEvents((prev) => {
               // Determine status from backend
               const taskStatus = (chunk.status || 'completed') as TimelineEvent['status'];
@@ -2215,6 +2251,92 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 status: taskStatus,
               }];
             });
+
+            // Toast: action completed / needs input (debounced by eventId/message)
+            try {
+              const dedupeKey = `task:${assistantMessageId || ''}:${chunk.eventId || ''}:${chunk.type}:${chunk.status || ''}:${chunk.message || chunk.summary || ''}`;
+              if (!taskToastDedupRef.current.has(dedupeKey)) {
+                taskToastDedupRef.current.add(dedupeKey);
+                const taskStatus = (chunk.status || 'completed') as TimelineEvent['status'];
+                const taskMessage =
+                  taskStatus === 'needs_input'
+                    ? 'Awaiting your response'
+                    : (chunk.message || chunk.summary || 'Request completed successfully');
+
+                showToast({
+                  title: taskStatus === 'needs_input' ? 'Needs your input' : 'Action completed',
+                  message: taskMessage,
+                  variant: taskStatus === 'needs_input' ? 'warning' : 'success',
+                  duration: taskStatus === 'needs_input' ? 5000 : 4000,
+                  onClick: currentChatId
+                    ? () => router.push(`/dashboard?tab=MainAgent&chatId=${encodeURIComponent(currentChatId)}`)
+                    : () => router.push('/dashboard?tab=MainAgent'),
+                });
+                // eslint-disable-next-line no-console
+                console.debug('[ToastDebug] showToast fired (SSE completed)', { dedupeKey, taskStatus, taskMessage });
+              } else {
+                // eslint-disable-next-line no-console
+                console.debug('[ToastDebug] toast deduped (SSE completed)', { dedupeKey });
+              }
+            } catch (_) {}
+            break;
+
+          case 'timeline_task_failed':
+            try {
+              // eslint-disable-next-line no-console
+              console.debug('[ToastDebug] SSE chunk timeline_task_failed', {
+                eventId: chunk.eventId,
+                message: chunk.message,
+                summary: chunk.summary,
+                currentChatId,
+                assistantMessageId,
+              });
+            } catch (_) {}
+            setTimelineEvents((prev) => {
+              const taskMessage = chunk.message || chunk.summary || 'Request failed';
+              const hasGeneratingResponse = prev.some(e => e.type === 'timeline_generating_response');
+              if (hasGeneratingResponse) {
+                return prev.map(e =>
+                  e.type === 'timeline_generating_response'
+                    ? {
+                        ...e,
+                        type: 'timeline_task_failed' as TimelineEventType,
+                        status: 'failed',
+                        message: taskMessage,
+                      }
+                    : e
+                );
+              }
+              return [...prev, {
+                eventId: chunk.eventId || `event-${Date.now()}`,
+                type: 'timeline_task_failed' as TimelineEventType,
+                timestamp: chunk.timestamp || new Date().toISOString(),
+                message: taskMessage,
+                status: 'failed',
+              }];
+            });
+
+            // Toast: action failed (debounced by eventId/message)
+            try {
+              const dedupeKey = `task:${assistantMessageId || ''}:${chunk.eventId || ''}:${chunk.type}:${chunk.message || chunk.summary || ''}`;
+              if (!taskToastDedupRef.current.has(dedupeKey)) {
+                taskToastDedupRef.current.add(dedupeKey);
+                showToast({
+                  title: 'Action failed',
+                  message: chunk.message || chunk.summary || 'Request failed',
+                  variant: 'error',
+                  duration: 5000,
+                  onClick: currentChatId
+                    ? () => router.push(`/dashboard?tab=MainAgent&chatId=${encodeURIComponent(currentChatId)}`)
+                    : () => router.push('/dashboard?tab=MainAgent'),
+                });
+                // eslint-disable-next-line no-console
+                console.debug('[ToastDebug] showToast fired (SSE failed)', { dedupeKey });
+              } else {
+                // eslint-disable-next-line no-console
+                console.debug('[ToastDebug] toast deduped (SSE failed)', { dedupeKey });
+              }
+            } catch (_) {}
             break;
           
           case 'timeline_plan':
@@ -2229,7 +2351,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
           case 'timeline_artifact_scanning':
           case 'timeline_analyzing_query':
           case 'timeline_generating_response':
-          case 'timeline_task_failed':
             // Add the timeline event to state
             const timelineEvent: TimelineEvent = {
               eventId: chunk.eventId || `event-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -2280,6 +2401,15 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 });
                 return updated;
               });
+
+              // Toast: file generated (click opens download)
+              showToast({
+                title: 'File generated',
+                message: `${chunk.filename} is ready for download`,
+                variant: 'success',
+                duration: 4000,
+                onClick: () => window.open(chunk.fileUrl as string, '_blank', 'noopener,noreferrer'),
+              });
             } else {
               console.warn('[FileGeneration] ⚠️ Missing required fields for file generation:', {
                 assistantMessageId,
@@ -2293,6 +2423,12 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
           case 'file_generation_error':
             console.error('[FileGeneration] ❌ Error:', chunk.message);
             // File generation failed - log the error but don't fail the entire request
+            showToast({
+              title: 'File generation failed',
+              message: chunk.message || 'Failed to generate file',
+              variant: 'error',
+              duration: 5000,
+            });
             break;
           
           case 'memory_stored':
@@ -2344,7 +2480,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             });
             break;
         }
-      }, currentChatId || undefined, userLocation, assistantMessageId, fileIds, userMessage.id, getBaseLanguageName(voiceLanguage));  // Pass currentChatId for artifact memory, userLocation for Maps, messageId for timeline, fileIds for file context, userMessageId, responseLanguage for multi-lang
+      }, currentChatId || undefined, userLocation, assistantMessageId, fileIds, userMessage.id, getResponseLanguageForQuery(userMessage.content));  // Strict per-message response language
 
     } catch (error: any) {
       if (error.message && (error.message.includes('Session expired') || error.message.includes('Authentication required'))) {
@@ -2663,6 +2799,17 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
           
           // Task completed - update ALL generating_response events to completed (confirmation flow)
           case 'timeline_task_completed':
+            try {
+              // eslint-disable-next-line no-console
+              console.debug('[ToastDebug] SSE(confirm) chunk timeline_task_completed', {
+                eventId: chunk.eventId,
+                status: chunk.status,
+                message: chunk.message,
+                summary: chunk.summary,
+                currentChatId,
+                assistantMessageId,
+              });
+            } catch (_) {}
             setTimelineEvents((prev) => {
               // Determine status from backend
               const taskStatus = (chunk.status || 'completed') as TimelineEvent['status'];
@@ -2687,6 +2834,92 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
               }
               return [...prev, { eventId: chunk.eventId || `event-${Date.now()}`, type: 'timeline_task_completed' as TimelineEventType, timestamp: chunk.timestamp || new Date().toISOString(), message: taskMessage, status: taskStatus }];
             });
+
+            // Toast: action completed / needs input (debounced)
+            try {
+              const dedupeKey = `confirm-task:${assistantMessageId || ''}:${chunk.eventId || ''}:${chunk.type}:${chunk.status || ''}:${chunk.message || chunk.summary || ''}`;
+              if (!taskToastDedupRef.current.has(dedupeKey)) {
+                taskToastDedupRef.current.add(dedupeKey);
+                const taskStatus = (chunk.status || 'completed') as TimelineEvent['status'];
+                const taskMessage =
+                  taskStatus === 'needs_input'
+                    ? 'Awaiting your response'
+                    : (chunk.message || chunk.summary || 'Request completed successfully');
+
+                showToast({
+                  title: taskStatus === 'needs_input' ? 'Needs your input' : 'Action completed',
+                  message: taskMessage,
+                  variant: taskStatus === 'needs_input' ? 'warning' : 'success',
+                  duration: taskStatus === 'needs_input' ? 5000 : 4000,
+                  onClick: currentChatId
+                    ? () => router.push(`/dashboard?tab=MainAgent&chatId=${encodeURIComponent(currentChatId)}`)
+                    : () => router.push('/dashboard?tab=MainAgent'),
+                });
+                // eslint-disable-next-line no-console
+                console.debug('[ToastDebug] showToast fired (SSE confirm completed)', { dedupeKey, taskStatus, taskMessage });
+              } else {
+                // eslint-disable-next-line no-console
+                console.debug('[ToastDebug] toast deduped (SSE confirm completed)', { dedupeKey });
+              }
+            } catch (_) {}
+            break;
+
+          case 'timeline_task_failed':
+            try {
+              // eslint-disable-next-line no-console
+              console.debug('[ToastDebug] SSE(confirm) chunk timeline_task_failed', {
+                eventId: chunk.eventId,
+                message: chunk.message,
+                summary: chunk.summary,
+                currentChatId,
+                assistantMessageId,
+              });
+            } catch (_) {}
+            setTimelineEvents((prev) => {
+              const taskMessage = chunk.message || chunk.summary || 'Action execution failed';
+              const hasGeneratingResponse = prev.some(e => e.type === 'timeline_generating_response');
+              if (hasGeneratingResponse) {
+                return prev.map(e =>
+                  e.type === 'timeline_generating_response'
+                    ? {
+                        ...e,
+                        type: 'timeline_task_failed' as TimelineEventType,
+                        status: 'failed',
+                        message: taskMessage,
+                      }
+                    : e
+                );
+              }
+              return [...prev, {
+                eventId: chunk.eventId || `event-${Date.now()}`,
+                type: 'timeline_task_failed' as TimelineEventType,
+                timestamp: chunk.timestamp || new Date().toISOString(),
+                message: taskMessage,
+                status: 'failed',
+              }];
+            });
+
+            // Toast: action failed (debounced)
+            try {
+              const dedupeKey = `confirm-task:${assistantMessageId || ''}:${chunk.eventId || ''}:${chunk.type}:${chunk.message || chunk.summary || ''}`;
+              if (!taskToastDedupRef.current.has(dedupeKey)) {
+                taskToastDedupRef.current.add(dedupeKey);
+                showToast({
+                  title: 'Action failed',
+                  message: chunk.message || chunk.summary || 'Action execution failed',
+                  variant: 'error',
+                  duration: 5000,
+                  onClick: currentChatId
+                    ? () => router.push(`/dashboard?tab=MainAgent&chatId=${encodeURIComponent(currentChatId)}`)
+                    : () => router.push('/dashboard?tab=MainAgent'),
+                });
+                // eslint-disable-next-line no-console
+                console.debug('[ToastDebug] showToast fired (SSE confirm failed)', { dedupeKey });
+              } else {
+                // eslint-disable-next-line no-console
+                console.debug('[ToastDebug] toast deduped (SSE confirm failed)', { dedupeKey });
+              }
+            } catch (_) {}
             break;
           
           case 'timeline_plan':
@@ -2701,7 +2934,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
           case 'timeline_artifact_scanning':
           case 'timeline_analyzing_query':
           case 'timeline_generating_response':
-          case 'timeline_task_failed':
             const confirmTimelineEvent: TimelineEvent = {
               eventId: chunk.eventId || `event-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
               type: chunk.type,
