@@ -1,9 +1,15 @@
 // Intent recognition utility for determining user intent from natural language input
+// NOTE: This module is primarily for frontend email intent detection.
+// For main query intent classification (actionable vs advisory), the backend
+// uses LLM-based classification in intentClassifier.js instead of regex.
 
 import { UserIntent } from './types';
 
 /**
  * Analyzes user input to determine whether they want to search emails or send emails
+ * This is a specialized intent detector for email-specific operations.
+ * For general query intent classification, use the backend's IntentClassifier.
+ * 
  * @param input - The user's natural language input
  * @returns UserIntent object with type, confidence, and extracted information
  */
