@@ -307,14 +307,31 @@ const extractFlightInfo = (content: string): FlightData | null => {
 
   // Extract route info - look for "Pune to Indore" or "from Pune to Indore" or "Pune (PNQ) to Indore (IDR)"
   // Be careful to not capture trailing words like "for", "on", etc.
-  const routeMatch = content.match(/(?:from\s+)?([A-Z][a-z]+)\s*(?:\([A-Z]{3}\))?\s+to\s+([A-Z][a-z]+)(?:\s*\([A-Z]{3}\))?/i) ||
-                     content.match(/([A-Z]{3})\s*[-→]\s*([A-Z]{3})/i) ||
-                     content.match(/(?:flights?\s+from\s+)([A-Z][a-z]+)\s+to\s+([A-Z][a-z]+)/i);
-  
+  // Route: prefer IATA code pairs (e.g. "PNQ to NAG") then city names (no /i flag to avoid matching tiny words)
+  const rawRouteMatch =
+    content.match(/\b([A-Z]{3})\b\s+to\s+\b([A-Z]{3})\b/) ||
+    content.match(/\b([A-Z]{3})\b\s*[-→]\s*\b([A-Z]{3})\b/) ||
+    content.match(/(?:from\s+)([A-Z][a-z]{2,})\s*(?:\([A-Z]{3}\))?\s+to\s+([A-Z][a-z]{2,})(?:\s*\([A-Z]{3}\))?/) ||
+    content.match(/flights?\s+from\s+([A-Z][a-z]{2,})\s+to\s+([A-Z][a-z]{2,})/i);
+
+  // Also try lowercase city names from common phrase "from pune to nagpur"
+  const lowerRouteMatch = !rawRouteMatch &&
+    (content.match(/from\s+([a-z]{3,})\s+to\s+([a-z]{3,})/i));
+  const routeMatch = rawRouteMatch || lowerRouteMatch || null;
+
   // Extract date - look for "December 16, 2025" format
   const dateMatch = content.match(/((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})/i) ||
                     content.match(/(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*,?\s*\d{4})/i) ||
                     content.match(/(\d{4}-\d{2}-\d{2})/i);
+
+  // Airline code → name map (shared below)
+  const airlineCodeMap2: Record<string, string> = {
+    '6E': 'IndiGo', 'AI': 'Air India', 'SG': 'SpiceJet', 'UK': 'Vistara',
+    'QP': 'Akasa Air', 'G8': 'Go First', 'I5': 'AirAsia India',
+    'IX': 'Air India Express', '9I': 'Alliance Air',
+    'EK': 'Emirates', 'QR': 'Qatar Airways', 'SQ': 'Singapore Airlines',
+    'LH': 'Lufthansa', 'BA': 'British Airways', 'EY': 'Etihad'
+  };
 
   // Parse individual flight entries using the structured format from AI
   const flights: Array<{
@@ -327,6 +344,45 @@ const extractFlightInfo = (content: string): FlightData | null => {
     stops: number;
     airplane?: string;
   }> = [];
+
+  // ── PRIMARY: parse from markdown table rows ──────────────────────────────
+  // Handles tables like:
+  // | IndiGo 6E 6798 | IndiGo | 00:15 | 01:35 | 80 min | ₹4683 | Direct |
+  const tableRowRegex = /\|\s*([^|\n-][^|\n]*?)\s*\|\s*([^|\n-][^|\n]*?)\s*\|\s*(\d{1,2}:\d{2}(?:\s*[AP]M)?)\s*\|\s*(\d{1,2}:\d{2}(?:\s*[AP]M)?)\s*\|\s*([^|\n]+?)\s*\|\s*(?:₹\s*)?((?:[\d,]+))\s*\|\s*([^|\n]*?)\s*\|/gim;
+  for (const m of content.matchAll(tableRowRegex)) {
+    const colA = m[1].trim();   // e.g. "IndiGo 6E 6798" or flight number
+    const colB = m[2].trim();   // airline name
+    const depTime = m[3].trim();
+    const arrTime = m[4].trim();
+    const durationStr = m[5].trim(); // e.g. "80 min" or "1 hr 15 min"
+    const price = parseInt(m[6].replace(/,/g, ''));
+    const flightType = m[7].trim().toLowerCase();
+    // Skip header rows (they won't have numeric times, but just in case)
+    if (!depTime.match(/\d{1,2}:\d{2}/) || price < 100) continue;
+    // Resolve airline
+    let resolvedAirline = colB;
+    if (!resolvedAirline || /^airline$/i.test(resolvedAirline.trim())) {
+      const fnCode = colA.match(/([A-Z0-9]{2})\s*\d{2,4}/i)?.[1]?.toUpperCase();
+      resolvedAirline = fnCode ? (airlineCodeMap2[fnCode] || colA) : colA;
+    }
+    // Extract flight number from colA if present
+    const fnMatch = colA.match(/([A-Z]{1,2})\s*(\d{3,4})/i);
+    const flightNumber = fnMatch ? `${fnMatch[1]}${fnMatch[2]}` : undefined;
+    const stops = (flightType.includes('direct') || flightType.includes('non-stop')) ? 0
+      : (/\d/.test(flightType) ? (parseInt(flightType) || 1) : (flightType.includes('stop') ? 1 : 0));
+    flights.push({
+      airline: resolvedAirline,
+      flightNumber,
+      price,
+      departureTime: depTime,
+      arrivalTime: arrTime,
+      duration: durationStr,
+      stops,
+      airplane: ''
+    });
+  }
+  // Skip the text-based parsing below if table parsing already found flights
+  const tableFlightsFound = flights.length > 0;
 
   // Extract using structured patterns matching AI response format:
   // - **Airline:** IndiGo
@@ -354,12 +410,15 @@ const extractFlightInfo = (content: string): FlightData | null => {
     'EY': 'Etihad'
   };
 
+  // ── FALLBACK text-based parsing (skipped if table parsing already succeeded) ──
   // Find flight numbers first - match "Flight Number: 6E 284" or standalone "6E284", "AI1804"
   const flightNumbers: string[] = [];
+  if (!tableFlightsFound) {
   const fnMatches = content.matchAll(/(?:\*\*)?(?:flight\s*(?:number|no\.?)?)(?:\*\*)?[:\s]+\*?\*?([A-Z]{1,2}\s*\d{2,4})(?:\*\*)?/gi);
   for (const m of fnMatches) {
     flightNumbers.push(m[1].replace(/\s+/g, ''));
   }
+  } // closes !tableFlightsFound guard opened above
 
   // Find all airlines - multiple patterns
   const airlines: string[] = [];
@@ -416,23 +475,23 @@ const extractFlightInfo = (content: string): FlightData | null => {
     }
   }
 
-  // Find durations - match "Duration: 1h 25m" or "1 hr 25 min"
+  // Find durations - match "Duration: 1h 25m", "1 hr 25 min", or standalone "80 min"
   const durations: string[] = [];
-  const durMatches = content.matchAll(/(?:\*\*)?(?:duration|total\s*duration)(?:\*\*)?[:\s]+\*?\*?(\d+\s*h(?:r|ours?)?\s*\d*\s*m(?:in)?)/gi);
+  const durMatches = content.matchAll(/(?:\*\*)?(?:duration|total\s*duration)(?:\*\*)?[:\s]+\*?\*?(\d+\s*(?:h(?:r|ours?)?\s*\d*\s*m(?:in)?|min))/gi);
   for (const m of durMatches) {
     durations.push(m[1]);
   }
 
-  // Find departures - match "Departure: 05:15 AM from Pune..."
+  // Find departures - match "Departure: 05:15 AM" or "Departure: 00:15" (24h)
   const departures: { time: string }[] = [];
-  const depMatches = content.matchAll(/(?:\*\*)?(?:departure|depart)(?:\*\*)?[:\s]+\*?\*?(\d{1,2}:\d{2}\s*(?:AM|PM))/gi);
+  const depMatches = content.matchAll(/(?:\*\*)?(?:departure|depart)(?:\*\*)?[:\s]+\*?\*?(\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)/gi);
   for (const m of depMatches) {
     departures.push({ time: m[1] });
   }
 
-  // Find arrivals - match "Arrival: 06:40 AM at Indore..."
+  // Find arrivals - match "Arrival: 06:40 AM" or "Arrival: 01:35" (24h)
   const arrivals: { time: string }[] = [];
-  const arrMatches = content.matchAll(/(?:\*\*)?(?:arrival|arrive)(?:\*\*)?[:\s]+\*?\*?(\d{1,2}:\d{2}\s*(?:AM|PM))/gi);
+  const arrMatches = content.matchAll(/(?:\*\*)?(?:arrival|arrive)(?:\*\*)?[:\s]+\*?\*?(\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)/gi);
   for (const m of arrMatches) {
     arrivals.push({ time: m[1] });
   }
@@ -461,20 +520,16 @@ const extractFlightInfo = (content: string): FlightData | null => {
     }
   }
 
-  // Build flight objects from extracted data
-  // Use flightNumbers.length as primary count since we can derive airlines from them
+  // Build flight objects from extracted data (only when table parsing found nothing)
+  if (!tableFlightsFound) {
   const maxFlights = Math.max(flightNumbers.length, airlines.length, prices.length);
   for (let i = 0; i < maxFlights && i < 20; i++) {
-    // Get airline from explicit list, or derive from flight number
     let airlineName = airlines[i];
     if (!airlineName && flightNumbers[i]) {
       const code = flightNumbers[i].match(/^([A-Z]{1,2})/i)?.[1]?.toUpperCase() || '';
       airlineName = airlineCodeMap[code];
     }
-    
-    // Skip if no airline and no price
     if (!airlineName && !prices[i]) continue;
-    
     flights.push({
       airline: airlineName || 'Airline',
       flightNumber: flightNumbers[i],
@@ -486,6 +541,7 @@ const extractFlightInfo = (content: string): FlightData | null => {
       airplane: airplanes[i] || ''
     });
   }
+  } // end !tableFlightsFound
 
   // Fallback: Try inline patterns like "IndiGo 6E284 - ₹6,048"
   if (flights.length === 0) {
@@ -631,8 +687,11 @@ const calculateDuration = (dep: string, arr: string): string => {
 // Helper to parse duration string to minutes
 const parseDurationToMinutes = (duration: string): number => {
   if (!duration) return 120;
+  // Handle plain "80 min" or "75min" format
+  const minOnlyMatch = duration.match(/^(\d+)\s*min/i);
+  if (minOnlyMatch) return parseInt(minOnlyMatch[1]);
   const hMatch = duration.match(/(\d+)\s*h/i);
-  const mMatch = duration.match(/(\d+)\s*m/i);
+  const mMatch = duration.match(/(\d+)\s*m(?!o)/i); // avoid matching "month"
   const hours = hMatch ? parseInt(hMatch[1]) : 0;
   const mins = mMatch ? parseInt(mMatch[1]) : 0;
   return hours * 60 + mins || 120;
