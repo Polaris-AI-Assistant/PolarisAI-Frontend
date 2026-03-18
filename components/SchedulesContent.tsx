@@ -11,6 +11,25 @@ import {
   pauseSchedule,
   resumeSchedule,
 } from '../lib/schedules'
+import { ScheduleCard } from './schedule-card'
+
+// Custom scrollbar styles for modal
+const modalScrollbarStyles = `
+  .modal-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+  .modal-scrollbar::-webkit-scrollbar-track {
+    background: rgba(26, 26, 26, 0.3);
+    border-radius: 4px;
+  }
+  .modal-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+  }
+  .modal-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+`;
 
 // ─── Cron preset options ─────────────────────────────────────────────
 const CRON_PRESETS = [
@@ -200,16 +219,17 @@ function ScheduleFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#1e1e1e] rounded-xl border border-white/10 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
+      <style>{modalScrollbarStyles}</style>
+      <div className="bg-[#0f0f0f]/95 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto modal-scrollbar">
+        <div className="p-8">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-semibold text-white">
               {editSchedule ? 'Edit Schedule' : 'Create Schedule'}
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors"
+              className="text-gray-500 hover:text-white transition-colors p-1"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -218,43 +238,47 @@ function ScheduleFormModal({
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Type selector */}
             {!editSchedule && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
-                <div className="flex gap-3">
+                <label className="block text-sm font-medium text-white mb-3">Type</label>
+                <div className="flex gap-4">
                   <button
                     type="button"
                     onClick={() => setType('reminder')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-all ${
+                    className={`flex-1 flex items-center justify-center gap-3 px-5 py-4 rounded-xl border transition-all ${
                       type === 'reminder'
-                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                        ? 'bg-white/[0.08] border-white/20 text-white shadow-lg'
+                        : 'bg-white/[0.02] border-white/[0.06] text-gray-400 hover:bg-white/[0.04] hover:border-white/10'
                     }`}
                   >
-                    <span className="text-lg">🔔</span>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
                     <span className="text-sm font-medium">Reminder</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setType('action')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-all ${
+                    className={`flex-1 flex items-center justify-center gap-3 px-5 py-4 rounded-xl border transition-all ${
                       type === 'action'
-                        ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                        ? 'bg-white/[0.08] border-white/20 text-white shadow-lg'
+                        : 'bg-white/[0.02] border-white/[0.06] text-gray-400 hover:bg-white/[0.04] hover:border-white/10'
                     }`}
                   >
-                    <span className="text-lg">⚡</span>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
                     <span className="text-sm font-medium">Action</span>
                   </button>
                 </div>
-                <p className="mt-1.5 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500">
                   {type === 'reminder'
                     ? 'Get a push notification at the scheduled time'
                     : 'AI will execute a task at the scheduled time'}
@@ -264,7 +288,7 @@ function ScheduleFormModal({
 
             {/* Content */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-white mb-3">
                 {type === 'reminder' ? 'Reminder Message' : 'Action to Execute'}
               </label>
               <textarea
@@ -277,14 +301,14 @@ function ScheduleFormModal({
                 }
                 required
                 rows={3}
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 text-sm focus:outline-none focus:border-white/30 resize-none transition-colors"
+                className="w-full px-4 py-3 bg-[#1a1a1a] border border-white/[0.08] rounded-xl text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-white/20 focus:bg-[#1f1f1f] resize-none transition-all"
               />
             </div>
 
             {/* ── Schedule Mode Tabs ── */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Frequency</label>
-              <div className="flex bg-white/5 p-1 rounded-lg">
+              <label className="block text-sm font-medium text-white mb-3">Frequency</label>
+              <div className="flex bg-[#1a1a1a] p-1 rounded-xl border border-white/[0.06]">
                 {([
                   { value: 'once', label: 'Once' },
                   { value: 'daily', label: 'Daily' },
@@ -295,9 +319,9 @@ function ScheduleFormModal({
                     key={tab.value}
                     type="button"
                     onClick={() => setScheduleMode(tab.value)}
-                    className={`flex-1 py-2 rounded-md text-xs font-medium transition-all ${
+                    className={`flex-1 py-2.5 rounded-lg text-xs font-medium transition-all ${
                       scheduleMode === tab.value
-                        ? 'bg-white/10 text-white shadow-sm'
+                        ? 'bg-white/[0.08] text-white shadow-sm'
                         : 'text-gray-500 hover:text-gray-300'
                     }`}
                   >
@@ -310,7 +334,7 @@ function ScheduleFormModal({
             {/* ── Date picker (Once mode) ── */}
             {scheduleMode === 'once' && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Date</label>
+                <label className="block text-sm font-medium text-white mb-3">Date</label>
                 <input
                   type="date"
                   value={specificDate}
@@ -318,7 +342,7 @@ function ScheduleFormModal({
                   onChange={(e) => setSpecificDate(e.target.value)}
                   required
                   style={{ colorScheme: 'dark' }}
-                  className="w-full px-4 py-3 bg-[#2a2a2a] border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-white/30 transition-colors"
+                  className="w-full px-4 py-3 bg-[#1a1a1a] border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-white/20 focus:bg-[#1f1f1f] transition-all"
                 />
               </div>
             )}
@@ -326,17 +350,17 @@ function ScheduleFormModal({
             {/* ── Day-of-week selector (Weekly mode) ── */}
             {scheduleMode === 'weekly' && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Repeat on</label>
-                <div className="flex gap-1.5">
+                <label className="block text-sm font-medium text-white mb-3">Repeat on</label>
+                <div className="flex gap-2">
                   {DAY_LABELS.map((day, i) => (
                     <button
                       key={day}
                       type="button"
                       onClick={() => toggleDay(i)}
-                      className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                      className={`flex-1 py-3 rounded-xl text-xs font-semibold transition-all ${
                         selectedDays[i]
-                          ? 'bg-emerald-500 text-black'
-                          : 'bg-white/5 border border-white/10 text-gray-500 hover:bg-white/10'
+                          ? 'bg-white text-black shadow-lg'
+                          : 'bg-[#1a1a1a] border border-white/[0.08] text-gray-500 hover:bg-white/[0.04] hover:border-white/[0.12]'
                       }`}
                     >
                       {day}
@@ -349,14 +373,14 @@ function ScheduleFormModal({
             {/* ── Time picker (all modes except custom) ── */}
             {scheduleMode !== 'custom' && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Time</label>
+                <label className="block text-sm font-medium text-white mb-3">Time</label>
                 <div className="flex gap-3 items-center">
                   <div className="flex-1 relative">
                     <select
                       value={hour}
                       onChange={(e) => setHour(e.target.value)}
                       style={{ colorScheme: 'dark' }}
-                      className="w-full appearance-none px-4 py-3 bg-[#2a2a2a] border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-white/30 transition-colors pr-8"
+                      className="w-full appearance-none px-4 py-3 bg-[#1a1a1a] border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-white/20 focus:bg-[#1f1f1f] transition-all pr-8"
                     >
                       {Array.from({ length: 24 }, (_, i) => {
                         const ampm = i >= 12 ? 'PM' : 'AM'
@@ -380,7 +404,7 @@ function ScheduleFormModal({
                       value={minute}
                       onChange={(e) => setMinute(e.target.value)}
                       style={{ colorScheme: 'dark' }}
-                      className="w-full appearance-none px-4 py-3 bg-[#2a2a2a] border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-white/30 transition-colors pr-8"
+                      className="w-full appearance-none px-4 py-3 bg-[#1a1a1a] border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-white/20 focus:bg-[#1f1f1f] transition-all pr-8"
                     >
                       {Array.from({ length: 60 }, (_, m) => (
                         <option key={m} value={String(m).padStart(2, '0')}>
@@ -399,7 +423,7 @@ function ScheduleFormModal({
             {/* ── Custom cron input ── */}
             {scheduleMode === 'custom' && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-white mb-3">
                   Cron Expression
                 </label>
                 <input
@@ -408,9 +432,9 @@ function ScheduleFormModal({
                   onChange={(e) => setCustomCron(e.target.value)}
                   placeholder="0 9 * * *"
                   required
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 text-sm focus:outline-none focus:border-white/30 transition-colors font-mono"
+                  className="w-full px-4 py-3 bg-[#1a1a1a] border border-white/[0.08] rounded-xl text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-white/20 focus:bg-[#1f1f1f] transition-all font-mono"
                 />
-                <p className="mt-1.5 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500">
                   Format: minute hour day month dayOfWeek
                 </p>
                 {/* Quick Presets */}
@@ -420,10 +444,10 @@ function ScheduleFormModal({
                       key={preset.value}
                       type="button"
                       onClick={() => setCustomCron(preset.value)}
-                      className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${
+                      className={`px-3 py-2 rounded-lg text-xs border transition-all ${
                         customCron === preset.value
-                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                          : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                          ? 'bg-white/[0.08] border-white/20 text-white'
+                          : 'bg-[#1a1a1a] border-white/[0.06] text-gray-400 hover:bg-white/[0.04]'
                       }`}
                     >
                       {preset.label}
@@ -434,60 +458,60 @@ function ScheduleFormModal({
             )}
 
             {/* ── Schedule preview ── */}
-            <div className="flex items-center gap-2.5 p-3 bg-white/5 rounded-lg">
-              <svg className="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center gap-3 p-4 bg-[#1a1a1a] border border-white/[0.06] rounded-xl">
+              <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <p className="text-xs text-gray-300">{previewText}</p>
+              <p className="text-sm text-white">{previewText}</p>
             </div>
 
             {/* Recurring toggle */}
-            <div className="flex items-center justify-between py-2">
+            <div className="flex items-center justify-between p-4 bg-[#1a1a1a] border border-white/[0.06] rounded-xl">
               <div>
-                <p className="text-sm font-medium text-gray-300">Recurring</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-sm font-medium text-white">Recurring</p>
+                <p className="text-xs text-gray-500 mt-0.5">
                   {recurring ? 'Will repeat on schedule' : 'Will run only once'}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setRecurring(!recurring)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${
-                  recurring ? 'bg-emerald-500' : 'bg-white/20'
+                className={`relative w-12 h-6 rounded-full transition-all shadow-inner ${
+                  recurring ? 'bg-white' : 'bg-white/10'
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-                    recurring ? 'translate-x-5' : 'translate-x-0'
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-all shadow-sm ${
+                    recurring ? 'translate-x-6 bg-black' : 'translate-x-0 bg-white/60'
                   }`}
                 />
               </button>
             </div>
 
             {/* Timezone info */}
-            <div className="flex items-center gap-2 p-3 bg-white/5 rounded-lg">
-              <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center gap-3 p-4 bg-[#1a1a1a] border border-white/[0.06] rounded-xl">
+              <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <p className="text-xs text-gray-400">
-                Timezone: <span className="text-gray-300">{timezone}</span>
+              <p className="text-sm text-gray-400">
+                Timezone: <span className="text-white">{timezone}</span>
               </p>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 pt-4">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={loading}
-                className="flex-1 px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white text-sm font-medium hover:bg-white/15 transition-colors disabled:opacity-50"
+                className="flex-1 px-5 py-3 bg-[#1a1a1a] border border-white/[0.08] rounded-xl text-white text-sm font-medium hover:bg-white/[0.04] hover:border-white/[0.12] transition-all disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading || !content || !cronExpression}
-                className="flex-1 px-4 py-2.5 bg-emerald-500 rounded-lg text-black text-sm font-semibold hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-5 py-3 bg-white rounded-xl text-black text-sm font-semibold hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
               >
                 {loading
                   ? 'Saving...'
@@ -498,129 +522,6 @@ function ScheduleFormModal({
             </div>
           </form>
         </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Status Badge ────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: string }) {
-  const config: Record<string, { bg: string; text: string; label: string }> = {
-    active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Active' },
-    paused: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Paused' },
-    completed: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Completed' },
-    failed: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Failed' },
-  }
-  const { bg, text, label } = config[status] || config.active
-
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bg} ${text}`}>
-      {label}
-    </span>
-  )
-}
-
-// ─── Schedule Card ───────────────────────────────────────────────────
-function ScheduleCard({
-  schedule,
-  onEdit,
-  onDelete,
-  onPause,
-  onResume,
-}: {
-  schedule: Schedule
-  onEdit: (s: Schedule) => void
-  onDelete: (id: string) => void
-  onPause: (id: string) => void
-  onResume: (id: string) => void
-}) {
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '—'
-    try {
-      return new Date(dateStr).toLocaleString()
-    } catch {
-      return dateStr
-    }
-  }
-
-  return (
-    <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl p-5 flex flex-col gap-4 hover:border-white/15 transition-colors">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="text-xl">{schedule.type === 'reminder' ? '🔔' : '⚡'}</span>
-          <span className="text-xs text-gray-500 uppercase tracking-wider font-medium">
-            {schedule.type}
-          </span>
-        </div>
-        <StatusBadge status={schedule.status} />
-      </div>
-
-      {/* Content */}
-      <p className="text-white text-sm leading-relaxed">{schedule.content}</p>
-
-      {/* Meta */}
-      <div className="space-y-2 pt-2 border-t border-white/[0.06]">
-        <div className="flex items-center gap-2 text-xs">
-          <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="text-gray-500">Next run:</span>
-          <span className="text-gray-300">
-            {formatDate(schedule.next_execution_local || schedule.next_execution)}
-          </span>
-        </div>
-
-        {schedule.recurring && (
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-blue-400">🔄</span>
-            <span className="text-blue-400 font-medium">Recurring</span>
-            <span className="text-gray-500 font-mono">{schedule.cron_expression}</span>
-          </div>
-        )}
-
-        {schedule.execution_count > 0 && (
-          <div className="flex items-center gap-2 text-xs">
-            <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="text-gray-500">Executed {schedule.execution_count} time{schedule.execution_count !== 1 ? 's' : ''}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="flex gap-2 pt-1">
-        {schedule.status === 'active' && (
-          <button
-            onClick={() => onPause(schedule.id)}
-            className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-300 text-xs font-medium hover:bg-white/10 transition-colors"
-          >
-            Pause
-          </button>
-        )}
-        {schedule.status === 'paused' && (
-          <button
-            onClick={() => onResume(schedule.id)}
-            className="flex-1 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-colors"
-          >
-            Resume
-          </button>
-        )}
-        <button
-          onClick={() => onEdit(schedule)}
-          className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-300 text-xs font-medium hover:bg-white/10 transition-colors"
-        >
-          Edit
-        </button>
-        <button
-          onClick={() => onDelete(schedule.id)}
-          className="px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs font-medium hover:bg-red-500/20 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </button>
       </div>
     </div>
   )
@@ -762,7 +663,7 @@ export default function SchedulesContent() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto px-8 py-6">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="flex items-center gap-3 text-gray-500">
@@ -781,7 +682,7 @@ export default function SchedulesContent() {
             }}
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {schedules.map((schedule) => (
               <ScheduleCard
                 key={schedule.id}

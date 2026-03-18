@@ -854,9 +854,10 @@ const PreviewContentRenderer = ({ content, actionType, agentName }: { content: s
         continue;
       }
       
-      // Handle numbered questions (for forms) - check this BEFORE body content handling
+      // Handle numbered questions (for forms) - but NOT when we're in email body mode
+      // Only treat numbered lists as form questions if we're not currently parsing email body
       const questionMatch = cleanLine.match(/^(\d+)\.\s*([📝📄🔘☑️📋⭐📅🕐❓]?\s*)(.+)$/);
-      if (questionMatch) {
+      if (questionMatch && !inBody) {
         // Found a question - switch to questions mode
         inBody = false;
         inQuestions = true;
