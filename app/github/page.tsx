@@ -1,7 +1,7 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Github, Send, User, Sparkles, MessageSquare, AlertCircle, Loader2, GitBranch, Star, Users, Code } from 'lucide-react';
+import { } from 'lucide-react';
 import { getCurrentUser, getStoredUser } from '@/lib/auth';
 import { ChatMessage } from '@/lib/types';
 import { formatDate, scrollToBottom } from '@/lib/utils';
@@ -12,7 +12,7 @@ export default function GitHubPage() {
     {
       id: '1',
       type: 'assistant',
-      content: "Hi! I'm your intelligent GitHub assistant powered by AI. I can help you with various GitHub operations:\n\n🔍 **Repository management**: 'Show me my repositories', 'Show recent 10 repos', or 'Find repos with JavaScript'\n📊 **Statistics**: 'Get my GitHub stats' or 'Show repository analytics'\n👥 **User information**: 'Show my profile info' or 'Get user details for username'\n🌟 **Stars and forks**: 'List my starred repos' or 'Show popular repositories'\n📝 **Issues and PRs**: 'Show issues in my repo' or 'List pull requests'\n🔍 **Search**: 'Search for React repositories' or 'Find trending projects'\n\n💡 **Pro tip**: When asking for repositories, you can specify how many you want to see (e.g., 'show 15 repos', 'recent 20 repositories'). By default, I'll show 10 repositories.\n\nJust tell me what you want to do in natural language - I'll understand your intent and fetch the information from GitHub!",
+      content: "Hi! I'm your intelligent GitHub assistant powered by AI. I can help you with various GitHub operations:\n\nðŸ” **Repository management**: 'Show me my repositories', 'Show recent 10 repos', or 'Find repos with JavaScript'\nðŸ“Š **Statistics**: 'Get my GitHub stats' or 'Show repository analytics'\nðŸ‘¥ **User information**: 'Show my profile info' or 'Get user details for username'\nðŸŒŸ **Stars and forks**: 'List my starred repos' or 'Show popular repositories'\nðŸ“ **Issues and PRs**: 'Show issues in my repo' or 'List pull requests'\nðŸ” **Search**: 'Search for React repositories' or 'Find trending projects'\n\nðŸ’¡ **Pro tip**: When asking for repositories, you can specify how many you want to see (e.g., 'show 15 repos', 'recent 20 repositories'). By default, I'll show 10 repositories.\n\nJust tell me what you want to do in natural language - I'll understand your intent and fetch the information from GitHub!",
       timestamp: new Date(),
     }
   ]);
@@ -31,7 +31,7 @@ export default function GitHubPage() {
           const errorMessage: ChatMessage = {
             id: Date.now().toString(),
             type: 'assistant',
-            content: "⚠️ **Authentication Required**\n\nPlease sign in to use the GitHub Assistant. You need to be authenticated to access your GitHub data.",
+            content: "âš ï¸ **Authentication Required**\n\nPlease sign in to use the GitHub Assistant. You need to be authenticated to access your GitHub data.",
             timestamp: new Date(),
             error: true,
           };
@@ -45,7 +45,7 @@ export default function GitHubPage() {
           const connectionMessage: ChatMessage = {
             id: Date.now().toString(),
             type: 'assistant',
-            content: "🔗 **GitHub Connection Required**\n\nTo use the GitHub Assistant, you need to connect your GitHub account first. Please go to the Apps section in the dashboard and connect your GitHub account.\n\nOnce connected, I'll be able to help you with all your GitHub needs!",
+            content: "ðŸ”— **GitHub Connection Required**\n\nTo use the GitHub Assistant, you need to connect your GitHub account first. Please go to the Apps section in the dashboard and connect your GitHub account.\n\nOnce connected, I'll be able to help you with all your GitHub needs!",
             timestamp: new Date(),
             error: true,
           };
@@ -54,7 +54,7 @@ export default function GitHubPage() {
           const welcomeMessage: ChatMessage = {
             id: Date.now().toString(),
             type: 'assistant',
-            content: `🎉 **Connected Successfully!**\n\nYour GitHub account (@${status.username}) is connected and ready to use. I can now help you with all your GitHub needs!\n\nWhat would you like to do first?`,
+            content: `ðŸŽ‰ **Connected Successfully!**\n\nYour GitHub account (@${status.username}) is connected and ready to use. I can now help you with all your GitHub needs!\n\nWhat would you like to do first?`,
             timestamp: new Date(),
           };
           setMessages(prev => [...prev, welcomeMessage]);
@@ -64,7 +64,7 @@ export default function GitHubPage() {
         const errorMessage: ChatMessage = {
           id: Date.now().toString(),
           type: 'assistant',
-          content: "❌ **Connection Error**\n\nThere was an error checking your GitHub connection. Please try refreshing the page or check your connection in the dashboard.",
+          content: "âŒ **Connection Error**\n\nThere was an error checking your GitHub connection. Please try refreshing the page or check your connection in the dashboard.",
           timestamp: new Date(),
           error: true,
         };
@@ -96,7 +96,7 @@ export default function GitHubPage() {
     const loadingMessage: ChatMessage = {
       id: (Date.now() + 1).toString(),
       type: 'assistant',
-      content: '🔍 Processing your GitHub request...',
+      content: 'ðŸ” Processing your GitHub request...',
       timestamp: new Date(),
       isLoading: true,
     };
@@ -162,10 +162,10 @@ export default function GitHubPage() {
           // Handle different types of GitHub data
           assistantContent = formatGitHubResponse(data.result, userInput, repoCount);
         } else {
-          assistantContent = '✅ Request completed successfully!';
+          assistantContent = 'âœ… Request completed successfully!';
         }
       } else {
-        assistantContent = `❌ **Error**: ${data.error || 'Unknown error occurred'}`;
+        assistantContent = `âŒ **Error**: ${data.error || 'Unknown error occurred'}`;
       }
 
       const assistantMessage: ChatMessage = {
@@ -187,7 +187,7 @@ export default function GitHubPage() {
       const errorMessage: ChatMessage = {
         id: (Date.now() + 2).toString(),
         type: 'assistant',
-        content: `❌ **Error**: ${error instanceof Error ? error.message : 'Unknown error occurred'}\n\nPlease make sure your GitHub account is connected and try again.`,
+        content: `âŒ **Error**: ${error instanceof Error ? error.message : 'Unknown error occurred'}\n\nPlease make sure your GitHub account is connected and try again.`,
         timestamp: new Date(),
         error: true,
       };
@@ -238,11 +238,11 @@ export default function GitHubPage() {
   const formatRepositoryList = (repos: any[], maxCount = 10): string => {
     const displayCount = Math.min(maxCount, repos.length);
     const repoList = repos.slice(0, displayCount).map((repo, index) => {
-      const stars = repo.stargazers_count ? `⭐ ${repo.stargazers_count}` : '';
-      const forks = repo.forks_count ? `🍴 ${repo.forks_count}` : '';
-      const language = repo.language ? `📝 ${repo.language}` : '';
-      const isPrivate = repo.private ? '🔒 Private' : '🌍 Public';
-      const updatedAt = repo.updated_at ? `📅 Last updated on ${new Date(repo.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}` : '';
+      const stars = repo.stargazers_count ? `â­ ${repo.stargazers_count}` : '';
+      const forks = repo.forks_count ? `ðŸ´ ${repo.forks_count}` : '';
+      const language = repo.language ? `ðŸ“ ${repo.language}` : '';
+      const isPrivate = repo.private ? 'ðŸ”’ Private' : 'ðŸŒ Public';
+      const updatedAt = repo.updated_at ? `ðŸ“… Last updated on ${new Date(repo.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}` : '';
       const description = repo.description ? `\n   ${repo.description}` : '';
       
       return `${index + 1}. [**${repo.name}**](${repo.html_url}) ${isPrivate}\n   ${stars} ${forks} ${language}\n   ${updatedAt}${description}`;
@@ -252,39 +252,39 @@ export default function GitHubPage() {
     
     let header = '';
     if (total > displayCount) {
-      header = `📚 **You have a total of ${total} repositories. Here are the first ${displayCount}:**\n\n`;
+      header = `ðŸ“š **You have a total of ${total} repositories. Here are the first ${displayCount}:**\n\n`;
     } else {
-      header = `📚 **Found ${total} repositories:**\n\n`;
+      header = `ðŸ“š **Found ${total} repositories:**\n\n`;
     }
     
     let footer = '';
     if (total > displayCount) {
-      footer = `\n\n💡 **Note**: This is not the complete list. If you need information about other repositories, let me know or specify a number like "show 20 repos".`;
+      footer = `\n\nðŸ’¡ **Note**: This is not the complete list. If you need information about other repositories, let me know or specify a number like "show 20 repos".`;
     }
     
     return `${header}${repoList}${footer}`;
   };
 
   const formatSingleRepository = (repo: any): string => {
-    const stars = repo.stargazers_count ? `⭐ ${repo.stargazers_count}` : '';
-    const forks = repo.forks_count ? `🍴 ${repo.forks_count}` : '';
-    const language = repo.language ? `📝 ${repo.language}` : '';
-    const isPrivate = repo.private ? '🔒 Private' : '🌍 Public';
+    const stars = repo.stargazers_count ? `â­ ${repo.stargazers_count}` : '';
+    const forks = repo.forks_count ? `ðŸ´ ${repo.forks_count}` : '';
+    const language = repo.language ? `ðŸ“ ${repo.language}` : '';
+    const isPrivate = repo.private ? 'ðŸ”’ Private' : 'ðŸŒ Public';
     const description = repo.description ? `\n\n**Description**: ${repo.description}` : '';
     const topics = repo.topics && repo.topics.length > 0 ? `\n\n**Topics**: ${repo.topics.join(', ')}` : '';
     
-    return `📂 **${repo.name}** ${isPrivate}\n\n${stars} ${forks} ${language}${description}${topics}\n\n🔗 [View Repository](${repo.html_url})`;
+    return `ðŸ“‚ **${repo.name}** ${isPrivate}\n\n${stars} ${forks} ${language}${description}${topics}\n\nðŸ”— [View Repository](${repo.html_url})`;
   };
 
   const formatUserProfile = (user: any): string => {
-    const followers = user.followers ? `👥 ${user.followers} followers` : '';
-    const following = user.following ? `👥 ${user.following} following` : '';
-    const repos = user.public_repos ? `📚 ${user.public_repos} public repos` : '';
-    const company = user.company ? `🏢 ${user.company}` : '';
-    const location = user.location ? `📍 ${user.location}` : '';
+    const followers = user.followers ? `ðŸ‘¥ ${user.followers} followers` : '';
+    const following = user.following ? `ðŸ‘¥ ${user.following} following` : '';
+    const repos = user.public_repos ? `ðŸ“š ${user.public_repos} public repos` : '';
+    const company = user.company ? `ðŸ¢ ${user.company}` : '';
+    const location = user.location ? `ðŸ“ ${user.location}` : '';
     const bio = user.bio ? `\n\n**Bio**: ${user.bio}` : '';
     
-    return `👤 **${user.name || user.login}** (@${user.login})\n\n${followers} ${following} ${repos}\n${company} ${location}${bio}\n\n🔗 [View Profile](${user.html_url})`;
+    return `ðŸ‘¤ **${user.name || user.login}** (@${user.login})\n\n${followers} ${following} ${repos}\n${company} ${location}${bio}\n\nðŸ”— [View Profile](${user.html_url})`;
   };
 
   const formatObjectResponse = (data: any): string => {
@@ -309,8 +309,8 @@ export default function GitHubPage() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 text-white">
-              <MessageSquare className="w-6 h-6" />
-              <Github className="w-5 h-5" />
+              <span>💬</span>
+              <span>🐙</span>
             </div>
             <div>
               <h1 className="text-xl font-semibold text-white">Intelligent GitHub Assistant</h1>
@@ -338,11 +338,11 @@ export default function GitHubPage() {
                           : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
                     }`}>
                       {message.type === 'user' ? (
-                        <User className="w-4 h-4" />
+                        <span>👤</span>
                       ) : message.error ? (
-                        <AlertCircle className="w-4 h-4" />
+                        <span>⚠️</span>
                       ) : (
-                        <Github className="w-4 h-4" />
+                        <span>🐙</span>
                       )}
                     </div>
                     <span className="text-sm text-gray-400">
@@ -363,7 +363,7 @@ export default function GitHubPage() {
                   }`}>
                     <div className="flex items-start gap-2">
                       {message.isLoading && (
-                        <Loader2 className="w-4 h-4 animate-spin mt-0.5 flex-shrink-0" />
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       )}
                       <div className="text-sm leading-relaxed whitespace-pre-line">
                         {message.content}
@@ -397,27 +397,27 @@ export default function GitHubPage() {
                 className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <Send className="w-5 h-5" />
+                  <span>→</span>
                 )}
               </button>
             </div>
             <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
               <div className="flex items-center gap-1">
-                <Code className="w-3 h-3" />
+                <span>💻</span>
                 <span>Repositories</span>
               </div>
               <div className="flex items-center gap-1">
-                <Star className="w-3 h-3" />
+                <span>⭐</span>
                 <span>Statistics</span>
               </div>
               <div className="flex items-center gap-1">
-                <Users className="w-3 h-3" />
+                <span>👥</span>
                 <span>User Info</span>
               </div>
               <div className="flex items-center gap-1">
-                <GitBranch className="w-3 h-3" />
+                <span>🌿</span>
                 <span>Issues & PRs</span>
               </div>
             </div>
@@ -427,3 +427,7 @@ export default function GitHubPage() {
     </div>
   );
 }
+
+
+
+

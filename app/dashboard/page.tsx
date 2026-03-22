@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useState, useEffect, useRef, Suspense, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -59,7 +59,7 @@ function SocketStatusBadge() {
       <span className={`inline-block w-2 h-2 rounded-full ${color} animate-pulse`} />
       <span>{label}</span>
       {connectionState === 'connected' && (
-        <span className="text-white/50">• {onlineUsers.length} online</span>
+        <span className="text-white/50">â€¢ {onlineUsers.length} online</span>
       )}
     </div>
   );
@@ -554,7 +554,7 @@ function Dashboard() {
           updateConnectionStatusCache('gmail', { connected: false })
           toastConnection('success', 'Success', 'Gmail disconnected successfully')
         } else {
-          toastConnection('error', 'Error', result.error || 'Failed to disconnect Gmail')
+          toastConnection('error', 'Error', result.message || 'Failed to disconnect Gmail')
         }
       } catch (error) {
         console.error('Error disconnecting Gmail:', error)
@@ -602,7 +602,7 @@ function Dashboard() {
           updateConnectionStatusCache('github', { connected: false })
           toastConnection('success', 'Success', 'GitHub disconnected successfully')
         } else {
-          toastConnection('error', 'Error', result.error || 'Failed to disconnect GitHub')
+          toastConnection('error', 'Error', result.message || 'Failed to disconnect GitHub')
         }
       } catch (error) {
         console.error('Error disconnecting GitHub:', error)
@@ -645,7 +645,7 @@ function Dashboard() {
           updateConnectionStatusCache('forms', { connected: false })
           toastConnection('success', 'Success', 'Google Forms disconnected successfully')
         } else {
-          toastConnection('error', 'Error', result.error || 'Failed to disconnect Google Forms')
+          toastConnection('error', 'Error', result.message || 'Failed to disconnect Google Forms')
         }
       } catch (error) {
         console.error('Error disconnecting Forms:', error)
@@ -686,7 +686,7 @@ function Dashboard() {
           setSheetsStatus({ connected: false })
           toastConnection('success', 'Success', 'Google Sheets disconnected successfully')
         } else {
-          toastConnection('error', 'Error', result.error || 'Failed to disconnect Google Sheets')
+          toastConnection('error', 'Error', result.message || 'Failed to disconnect Google Sheets')
         }
       } catch (error) {
         console.error('Error disconnecting Sheets:', error)
@@ -728,7 +728,7 @@ function Dashboard() {
           setDocsStatus({ connected: false, email: null })
           toastConnection('success', 'Success', 'Google Docs disconnected successfully')
         } else {
-          toastConnection('error', 'Error', result.error || 'Failed to disconnect Google Docs')
+          toastConnection('error', 'Error', result.message || 'Failed to disconnect Google Docs')
         }
       } catch (error) {
         console.error('Error disconnecting Docs:', error)
@@ -772,7 +772,7 @@ function Dashboard() {
           setCalendarStatus({ connected: false })
           toastConnection('success', 'Success', 'Google Calendar disconnected successfully')
         } else {
-          toastConnection('error', 'Error', result.error || 'Failed to disconnect Google Calendar')
+          toastConnection('error', 'Error', result.message || 'Failed to disconnect Google Calendar')
         }
       } catch (error) {
         console.error('Error disconnecting Calendar:', error)
@@ -813,7 +813,7 @@ function Dashboard() {
           setMeetStatus({ connected: false })
           toastConnection('success', 'Success', 'Google Meet disconnected successfully')
         } else {
-          toastConnection('error', 'Error', result.error || 'Failed to disconnect Google Meet')
+          toastConnection('error', 'Error', result.message || 'Failed to disconnect Google Meet')
         }
       } catch (error) {
         console.error('Error disconnecting Meet:', error)
@@ -1144,7 +1144,7 @@ function Dashboard() {
           setGmailStats(stats)
         }, 1000)
       } else {
-        setProcessingStatus(`Error: ${result.error}`)
+        setProcessingStatus(`Error: ${result.message}`)
       }
     } catch (error) {
       setProcessingStatus(`Error: ${error}`)
@@ -1521,3 +1521,4 @@ function DashboardPage() {
 }
 
 export default DashboardPage
+

@@ -1,7 +1,7 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Search, Send, Mail, Clock, User, Sparkles, MessageSquare, AlertCircle, Loader2 } from 'lucide-react';
+import { } from 'lucide-react';
 import { getCurrentUser, getStoredUser } from '@/lib/auth';
 import { ChatMessage } from '@/lib/types';
 import { analyzeUserIntent } from '@/lib/intentRecognition';
@@ -20,7 +20,7 @@ export default function SearchPage() {
     {
       id: '1',
       type: 'assistant',
-      content: "Hi! I'm your intelligent Gmail assistant. I can help you with two things:\n\n🔍 **Search emails**: 'Show me job opportunities' or 'Find emails about meetings'\n✉️ **Send emails**: 'Send a thank you email to john@example.com' or 'Email sarah@company.com about project update'\n\nJust tell me what you want to do in natural language!",
+      content: "Hi! I'm your intelligent Gmail assistant. I can help you with two things:\n\nðŸ” **Search emails**: 'Show me job opportunities' or 'Find emails about meetings'\nâœ‰ï¸ **Send emails**: 'Send a thank you email to john@example.com' or 'Email sarah@company.com about project update'\n\nJust tell me what you want to do in natural language!",
       timestamp: new Date(),
     }
   ]);
@@ -72,8 +72,8 @@ export default function SearchPage() {
       id: (Date.now() + 1).toString(),
       type: 'assistant',
       content: intent.type === 'send' 
-        ? '📧 I detected you want to send an email. Let me compose and send it for you...'
-        : '🔍 Searching through your emails...',
+        ? 'ðŸ“§ I detected you want to send an email. Let me compose and send it for you...'
+        : 'ðŸ” Searching through your emails...',
       timestamp: new Date(),
       isLoading: true,
     };
@@ -145,8 +145,8 @@ export default function SearchPage() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 text-blue-600">
-              <MessageSquare className="w-6 h-6" />
-              <Mail className="w-5 h-5" />
+              <span>💬</span>
+              <span>📧</span>
             </div>
             <div>
               <h1 className="text-xl font-semibold text-gray-900">Intelligent Gmail Assistant</h1>
@@ -172,9 +172,9 @@ export default function SearchPage() {
                         : 'bg-gradient-to-r from-purple-500 to-blue-500 text-white'
                     }`}>
                       {message.type === 'user' ? (
-                        <User className="w-4 h-4" />
+                        <span>👤</span>
                       ) : (
-                        <Sparkles className="w-4 h-4" />
+                        <span>✨</span>
                       )}
                     </div>
                     <span className="text-sm text-gray-600">
@@ -193,7 +193,7 @@ export default function SearchPage() {
                   }`}>
                     <div className="flex items-center gap-2">
                       {message.isLoading && (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       )}
                       <p className="text-sm leading-relaxed whitespace-pre-line">{message.content}</p>
                     </div>
@@ -202,9 +202,9 @@ export default function SearchPage() {
                     {message.type === 'user' && message.intent && (
                       <div className="mt-2 flex items-center gap-2 opacity-80">
                         {message.intent.type === 'send' ? (
-                          <Mail className="w-3 h-3" />
+                          <span>📧</span>
                         ) : (
-                          <Search className="w-3 h-3" />
+                          <span>🔍</span>
                         )}
                         <span className="text-xs">
                           {message.intent.type === 'send' ? 'Send Email' : 'Search Emails'} 
@@ -227,11 +227,11 @@ export default function SearchPage() {
                               </h3>
                               <div className="flex items-center gap-2 mt-1">
                                 <span className="text-sm text-gray-600 flex items-center gap-1">
-                                  <User className="w-3 h-3" />
+                                  <span>👤</span>
                                   {result.sender}
                                 </span>
                                 <span className="text-sm text-gray-500 flex items-center gap-1">
-                                  <Clock className="w-3 h-3" />
+                                  <span>🕒</span>
                                   {formatDate(result.date)}
                                 </span>
                               </div>
@@ -272,7 +272,7 @@ export default function SearchPage() {
                       <div className="bg-green-50 border border-green-200 rounded-xl p-4 shadow-sm">
                         <div className="flex items-center gap-3 mb-3">
                           <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                            <Mail className="w-4 h-4 text-green-600" />
+                            <span>📧</span>
                           </div>
                           <div>
                             <h3 className="font-medium text-green-900">Email Sent Successfully!</h3>
@@ -336,7 +336,7 @@ export default function SearchPage() {
                     target.style.height = Math.min(target.scrollHeight, 120) + 'px';
                   }}
                 />
-                <Search className="absolute right-3 top-3 w-5 h-5 text-gray-400" />
+                <span>🔍</span>
               </div>
               <button
                 onClick={handleUserInput}
@@ -344,9 +344,9 @@ export default function SearchPage() {
                 className="flex items-center justify-center w-11 h-11 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
                 {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <Send className="w-5 h-5" />
+                  <span>→</span>
                 )}
               </button>
             </div>
@@ -356,26 +356,26 @@ export default function SearchPage() {
         {/* Tips */}
         <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+            <span>⚠️</span>
             <div>
               <h3 className="font-medium text-blue-900 mb-1">Usage Tips</h3>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <h4 className="text-sm font-medium text-blue-900 mb-2">🔍 Search Emails:</h4>
+                  <h4 className="text-sm font-medium text-blue-900 mb-2">ðŸ” Search Emails:</h4>
                   <ul className="text-sm text-blue-800 space-y-1">
-                    <li>• "Show me emails about job opportunities"</li>
-                    <li>• "Find emails about meetings this week"</li>
-                    <li>• "Search for project updates"</li>
-                    <li>• "Get emails from my manager"</li>
+                    <li>â€¢ "Show me emails about job opportunities"</li>
+                    <li>â€¢ "Find emails about meetings this week"</li>
+                    <li>â€¢ "Search for project updates"</li>
+                    <li>â€¢ "Get emails from my manager"</li>
                   </ul>
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-blue-900 mb-2">📧 Send Emails:</h4>
+                  <h4 className="text-sm font-medium text-blue-900 mb-2">ðŸ“§ Send Emails:</h4>
                   <ul className="text-sm text-blue-800 space-y-1">
-                    <li>• "Send thank you to john@example.com"</li>
-                    <li>• "Email sarah@company.com about project update"</li>
-                    <li>• "Tell manager@company.com I'll be late"</li>
-                    <li>• "Write to team@company.com about meeting"</li>
+                    <li>â€¢ "Send thank you to john@example.com"</li>
+                    <li>â€¢ "Email sarah@company.com about project update"</li>
+                    <li>â€¢ "Tell manager@company.com I'll be late"</li>
+                    <li>â€¢ "Write to team@company.com about meeting"</li>
                   </ul>
                 </div>
               </div>
@@ -387,3 +387,6 @@ export default function SearchPage() {
     </div>
   );
 }
+
+
+

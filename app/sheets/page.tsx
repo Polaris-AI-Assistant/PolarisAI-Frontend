@@ -1,7 +1,7 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Table, Send, User, Sparkles, MessageSquare, AlertCircle, Loader2, ExternalLink, Eye } from 'lucide-react';
+import { } from 'lucide-react';
 import { getCurrentUser, getStoredUser } from '@/lib/auth';
 import { ChatMessage } from '@/lib/types';
 import { formatDate, scrollToBottom } from '@/lib/utils';
@@ -58,7 +58,7 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
   // If we found multiple spreadsheets, render as a nice list
   if (spreadsheetsList.length > 1) {
     const introMatch = content.match(/^([\s\S]*?)(?=1\.)/);
-    const introText = introMatch ? introMatch[1].trim() : '📊 Here are your Google Sheets:';
+    const introText = introMatch ? introMatch[1].trim() : 'ðŸ“Š Here are your Google Sheets:';
     
     return (
       <div className="space-y-4">
@@ -81,7 +81,7 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
                     </h3>
                     {sheet.created && (
                       <p className="text-xs text-gray-400 mb-1">
-                        📅 Created: {sheet.created}
+                        ðŸ“… Created: {sheet.created}
                       </p>
                     )}
                     <p className="text-xs text-gray-500 font-mono break-all">
@@ -97,16 +97,16 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl ml-4 flex-shrink-0"
               >
-                <Eye className="w-4 h-4" />
+                <span>👁️</span>
                 View
-                <ExternalLink className="w-3 h-3" />
+                <span>↗</span>
               </a>
             </div>
           ))}
         </div>
         
         <div className="text-sm text-gray-400 mt-4">
-          💬 Which spreadsheet would you like to work with?
+          ðŸ’¬ Which spreadsheet would you like to work with?
         </div>
       </div>
     );
@@ -133,9 +133,9 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
           >
-            <Eye className="w-4 h-4" />
+            <span>👁️</span>
             View Spreadsheet
-            <ExternalLink className="w-3 h-3" />
+            <span>↗</span>
           </a>
         </div>
       )}
@@ -265,7 +265,7 @@ export default function SheetsPage() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-green-500 animate-spin mx-auto mb-4" />
+          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           <p className="text-gray-400">Loading Google Sheets...</p>
         </div>
       </div>
@@ -277,7 +277,7 @@ export default function SheetsPage() {
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-[#171717] rounded-2xl p-8 text-center">
           <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Table className="w-10 h-10 text-green-500" />
+            <span>📊</span>
           </div>
           
           <h1 className="text-3xl font-bold text-white mb-4">
@@ -293,7 +293,7 @@ export default function SheetsPage() {
             onClick={handleConnect}
             className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-3"
           >
-            <Table className="w-5 h-5" />
+            <span>📊</span>
             Connect Google Sheets
           </button>
           
@@ -301,17 +301,17 @@ export default function SheetsPage() {
             <p className="text-sm text-gray-400 text-left">
               <strong className="text-green-400">What you can do:</strong>
               <br />
-              • List and search your spreadsheets
+              â€¢ List and search your spreadsheets
               <br />
-              • Create new spreadsheets and sheets
+              â€¢ Create new spreadsheets and sheets
               <br />
-              • Read and update cell data
+              â€¢ Read and update cell data
               <br />
-              • Format cells with colors and styles
+              â€¢ Format cells with colors and styles
               <br />
-              • Share spreadsheets with others
+              â€¢ Share spreadsheets with others
               <br />
-              • Manage rows and columns
+              â€¢ Manage rows and columns
             </p>
           </div>
         </div>
@@ -327,7 +327,7 @@ export default function SheetsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-green-600 to-emerald-600 rounded-lg flex items-center justify-center">
-                <Table className="w-6 h-6 text-white" />
+                <span>📊</span>
               </div>
               <div>
                 <h1 className="text-xl font-bold text-white">Google Sheets AI</h1>
@@ -354,7 +354,7 @@ export default function SheetsPage() {
           {messages.length === 0 && (
             <div className="text-center py-12">
               <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Sparkles className="w-8 h-8 text-green-500" />
+                <span>✨</span>
               </div>
               <h2 className="text-xl font-semibold text-white mb-2">
                 Ask me anything about your spreadsheets
@@ -391,7 +391,7 @@ export default function SheetsPage() {
             >
               {message.type === 'assistant' && (
                 <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-emerald-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="w-5 h-5 text-white" />
+                  <span>✨</span>
                 </div>
               )}
               
@@ -415,7 +415,7 @@ export default function SheetsPage() {
               
               {message.type === 'user' && (
                 <div className="w-8 h-8 bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <User className="w-5 h-5 text-gray-300" />
+                  <span>👤</span>
                 </div>
               )}
             </div>
@@ -424,10 +424,10 @@ export default function SheetsPage() {
           {isSending && (
             <div className="flex gap-4 justify-start">
               <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-emerald-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Sparkles className="w-5 h-5 text-white" />
+                <span>✨</span>
               </div>
               <div className="bg-[#171717] rounded-2xl px-5 py-4 border border-gray-800">
-                <Loader2 className="w-5 h-5 text-green-500 animate-spin" />
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               </div>
             </div>
           )}
@@ -452,9 +452,9 @@ export default function SheetsPage() {
             className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-700 disabled:to-gray-700 text-white p-3 rounded-xl transition-all duration-200 disabled:cursor-not-allowed flex items-center justify-center min-w-[48px]"
           >
             {isSending ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
-              <Send className="w-5 h-5" />
+              <span>→</span>
             )}
           </button>
         </div>
@@ -462,3 +462,7 @@ export default function SheetsPage() {
     </div>
   );
 }
+
+
+
+

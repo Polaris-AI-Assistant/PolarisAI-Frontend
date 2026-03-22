@@ -1,7 +1,7 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Video, Send, User, Sparkles, MessageSquare, AlertCircle, Loader2, Copy, ExternalLink, CheckCircle } from 'lucide-react';
+import { } from 'lucide-react';
 import { getCurrentUser, getStoredUser } from '@/lib/auth';
 import { ChatMessage } from '@/lib/types';
 import { formatDate, scrollToBottom } from '@/lib/utils';
@@ -43,7 +43,7 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
         <div className="mt-4 p-4 bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-lg border border-blue-500/30">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-gray-400 mb-2 font-semibold">📹 Meeting Link</p>
+              <p className="text-xs text-gray-400 mb-2 font-semibold">ðŸ“¹ Meeting Link</p>
               <a
                 href={meetingLink}
                 target="_blank"
@@ -62,12 +62,12 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
               >
                 {copied ? (
                   <>
-                    <CheckCircle className="w-4 h-4" />
+                    <span>✅</span>
                     Copied!
                   </>
                 ) : (
                   <>
-                    <Copy className="w-4 h-4" />
+                    <span>📋</span>
                     Copy
                   </>
                 )}
@@ -80,7 +80,7 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
                 className="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-xs font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
               >
                 Join Meeting
-                <ExternalLink className="w-3 h-3" />
+                <span>↗</span>
               </a>
             </div>
           </div>
@@ -213,7 +213,7 @@ export default function MeetPage() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
         <div className="text-center">
-          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <span>⚠️</span>
           <h1 className="text-2xl font-bold text-white mb-2">Authentication Required</h1>
           <p className="text-gray-300 mb-4">Please sign in to access Google Meet</p>
           <a
@@ -233,7 +233,7 @@ export default function MeetPage() {
         <div className="max-w-md w-full bg-gray-800/50 backdrop-blur-lg rounded-2xl shadow-2xl p-8 border border-gray-700">
           <div className="text-center">
             <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-              <Video className="w-10 h-10 text-white" />
+              <span>🎥</span>
             </div>
             
             <h1 className="text-3xl font-bold text-white mb-3">
@@ -248,23 +248,23 @@ export default function MeetPage() {
               <h3 className="text-sm font-semibold text-gray-300 mb-3">Features:</h3>
               <ul className="text-left text-sm text-gray-400 space-y-2">
                 <li className="flex items-start gap-2">
-                  <span className="text-blue-400 mt-1">•</span>
+                  <span className="text-blue-400 mt-1">â€¢</span>
                   <span>Create instant meeting links</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-blue-400 mt-1">•</span>
+                  <span className="text-blue-400 mt-1">â€¢</span>
                   <span>Access meeting history and details</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-blue-400 mt-1">•</span>
+                  <span className="text-blue-400 mt-1">â€¢</span>
                   <span>View and manage recordings</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-blue-400 mt-1">•</span>
+                  <span className="text-blue-400 mt-1">â€¢</span>
                   <span>Track meeting participants</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-blue-400 mt-1">•</span>
+                  <span className="text-blue-400 mt-1">â€¢</span>
                   <span>AI-powered meeting assistance</span>
                 </li>
               </ul>
@@ -274,7 +274,7 @@ export default function MeetPage() {
               onClick={handleConnect}
               className="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-3"
             >
-              <Video className="w-5 h-5" />
+              <span>🎥</span>
               Connect Google Meet
             </button>
 
@@ -294,7 +294,7 @@ export default function MeetPage() {
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
-              <Video className="w-6 h-6 text-white" />
+              <span>🎥</span>
             </div>
             <div>
               <h1 className="text-xl font-bold text-white">Google Meet Assistant</h1>
@@ -324,7 +324,7 @@ export default function MeetPage() {
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center p-8">
                 <div className="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-purple-600/20 rounded-full flex items-center justify-center mb-4">
-                  <Sparkles className="w-8 h-8 text-blue-400" />
+                  <span>✨</span>
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-2">
                   Google Meet AI Assistant
@@ -346,7 +346,7 @@ export default function MeetPage() {
                       onClick={() => setInputMessage(example)}
                       className="p-3 bg-gray-800/50 hover:bg-gray-800 border border-gray-700 hover:border-blue-500/50 rounded-lg text-sm text-gray-300 hover:text-white transition-all text-left"
                     >
-                      💬 {example}
+                      ðŸ’¬ {example}
                     </button>
                   ))}
                 </div>
@@ -360,7 +360,7 @@ export default function MeetPage() {
               >
                 {message.type === 'assistant' && (
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg">
-                    <Sparkles className="w-4 h-4 text-white" />
+                    <span>✨</span>
                   </div>
                 )}
                 
@@ -385,7 +385,7 @@ export default function MeetPage() {
 
                 {message.type === 'user' && (
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center flex-shrink-0 shadow-lg">
-                    <User className="w-4 h-4 text-white" />
+                    <span>👤</span>
                   </div>
                 )}
               </div>
@@ -394,10 +394,10 @@ export default function MeetPage() {
             {isSending && (
               <div className="flex gap-3 justify-start">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg">
-                  <Sparkles className="w-4 h-4 text-white" />
+                  <span>✨</span>
                 </div>
                 <div className="bg-gray-800/70 backdrop-blur-sm rounded-2xl p-4 border border-gray-700">
-                  <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 </div>
               </div>
             )}
@@ -426,10 +426,10 @@ export default function MeetPage() {
                 className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 text-white font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isSending ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <>
-                    <Send className="w-5 h-5" />
+                    <span>→</span>
                     <span className="hidden sm:inline">Send</span>
                   </>
                 )}
@@ -437,7 +437,7 @@ export default function MeetPage() {
             </div>
             
             <p className="text-xs text-gray-500 mt-2">
-              💡 Try: "Create a meeting", "Show recordings", "List participants"
+              ðŸ’¡ Try: "Create a meeting", "Show recordings", "List participants"
             </p>
           </div>
         </div>
@@ -445,3 +445,8 @@ export default function MeetPage() {
     </div>
   );
 }
+
+
+
+
+

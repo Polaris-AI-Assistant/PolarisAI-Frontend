@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Calendar as CalendarIcon, Send, User, Sparkles, Loader2, Clock, MapPin, Users, Video, ExternalLink } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock } from 'lucide-react';
 import { getCurrentUser, getStoredUser } from '@/lib/auth';
 import { ChatMessage } from '@/lib/types';
 import { formatDate, scrollToBottom } from '@/lib/utils';
@@ -92,7 +92,7 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
                     )}
                     {event.location && (
                       <p className="text-xs text-gray-400 flex items-center gap-2">
-                        <MapPin className="w-3 h-3" />
+                        <span>📍</span>
                         {event.location}
                       </p>
                     )}
@@ -108,7 +108,7 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
                   className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl ml-4 flex-shrink-0"
                 >
                   View
-                  <ExternalLink className="w-3 h-3" />
+                  <span>↗</span>
                 </a>
               )}
             </div>
@@ -146,7 +146,7 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
             >
               <CalendarIcon className="w-4 h-4" />
               View in Calendar
-              <ExternalLink className="w-3 h-3" />
+              <span>↗</span>
             </a>
           )}
         </div>
@@ -384,9 +384,9 @@ export default function CalendarPage() {
               {message.type === 'assistant' && (
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center flex-shrink-0">
                   {message.isLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <Sparkles className="w-5 h-5" />
+                    <span className="text-lg">✨</span>
                   )}
                 </div>
               )}
@@ -403,7 +403,7 @@ export default function CalendarPage() {
                 <div className="prose prose-invert max-w-none">
                   {message.isLoading ? (
                     <div className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       <span className="text-sm">{message.content}</span>
                     </div>
                   ) : message.type === 'assistant' ? (
@@ -438,7 +438,7 @@ export default function CalendarPage() {
 
               {message.type === 'user' && (
                 <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
-                  <User className="w-5 h-5" />
+                  <span className="text-lg">👤</span>
                 </div>
               )}
             </div>
@@ -471,9 +471,9 @@ export default function CalendarPage() {
               className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed text-white p-4 rounded-2xl transition-all duration-200 transform hover:scale-105 active:scale-95"
             >
               {isLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <Send className="w-5 h-5" />
+                <span className="text-lg">→</span>
               )}
             </button>
           </div>

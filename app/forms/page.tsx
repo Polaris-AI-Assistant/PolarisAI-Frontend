@@ -1,7 +1,6 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { FileText, Send, User, Sparkles, MessageSquare, AlertCircle, Loader2, Plus, Edit, Trash2, ExternalLink, Eye } from 'lucide-react';
 import { getCurrentUser, getStoredUser } from '@/lib/auth';
 import { ChatMessage } from '@/lib/types';
 import { formatDate, scrollToBottom } from '@/lib/utils';
@@ -76,7 +75,7 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
   if (formsList.length > 1) {
     // Extract intro text (everything before "1.")
     const introMatch = content.match(/^(.*?)(?=1\.)/s);
-    const introText = introMatch ? introMatch[1].trim() : '📋 Here are your Google Forms:';
+    const introText = introMatch ? introMatch[1].trim() : 'ðŸ“‹ Here are your Google Forms:';
     
     return (
       <div className="space-y-4">
@@ -99,7 +98,7 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
                     </h3>
                     {form.created && (
                       <p className="text-xs text-gray-400 mb-1">
-                        📅 Created: {form.created}
+                        ðŸ“… Created: {form.created}
                       </p>
                     )}
                     <p className="text-xs text-gray-500 font-mono break-all">
@@ -115,16 +114,16 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl ml-4 flex-shrink-0"
               >
-                <Eye className="w-4 h-4" />
+                <span>👁️</span>
                 View
-                <ExternalLink className="w-3 h-3" />
+                <span>â†—</span>
               </a>
             </div>
           ))}
         </div>
         
         <div className="text-sm text-gray-400 mt-4">
-          💬 Which form would you like to work with?
+          ðŸ’¬ Which form would you like to work with?
         </div>
       </div>
     );
@@ -151,9 +150,9 @@ const FormattedAgentResponse = ({ content }: { content: string }) => {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
           >
-            <Eye className="w-4 h-4" />
+            <span>👁️</span>
             View Form
-            <ExternalLink className="w-3 h-3" />
+            <span>↗</span>
           </a>
         </div>
       )}
@@ -166,7 +165,7 @@ export default function FormsPage() {
     {
       id: '1',
       type: 'assistant',
-      content: "Hi! I'm your intelligent Google Forms assistant powered by AI. I can help you with various Forms operations:\n\n📋 **List Forms**: 'Show me all my forms' or 'List my Google Forms'\n➕ **Create Forms**: 'Create a feedback form' or 'Make a customer satisfaction survey'\n📊 **Get Responses**: 'Show me responses for form [FORM_ID]' or 'How many responses does my form have?'\n📝 **Form Details**: 'Show me details of form [FORM_ID]' or 'What questions are in my form?'\n✏️ **Update Forms**: 'Add questions to form [FORM_ID]' or 'Change the title of my form'\n🚀 **Publish Forms**: 'Publish form [FORM_ID]' or 'Stop accepting responses'\n\n💡 **Pro tip**: I can create forms with multiple question types:\n- Short answer (text)\n- Long answer (paragraph)\n- Multiple choice (choose one)\n- Checkboxes (choose multiple)\n- Dropdown (select from list)\n\nJust tell me what you want to do in natural language - I'll understand your intent and work with Google Forms for you!",
+      content: "Hi! I'm your intelligent Google Forms assistant powered by AI. I can help you with various Forms operations:\n\nðŸ“‹ **List Forms**: 'Show me all my forms' or 'List my Google Forms'\nâž• **Create Forms**: 'Create a feedback form' or 'Make a customer satisfaction survey'\nðŸ“Š **Get Responses**: 'Show me responses for form [FORM_ID]' or 'How many responses does my form have?'\nðŸ“ **Form Details**: 'Show me details of form [FORM_ID]' or 'What questions are in my form?'\nâœï¸ **Update Forms**: 'Add questions to form [FORM_ID]' or 'Change the title of my form'\nðŸš€ **Publish Forms**: 'Publish form [FORM_ID]' or 'Stop accepting responses'\n\nðŸ’¡ **Pro tip**: I can create forms with multiple question types:\n- Short answer (text)\n- Long answer (paragraph)\n- Multiple choice (choose one)\n- Checkboxes (choose multiple)\n- Dropdown (select from list)\n\nJust tell me what you want to do in natural language - I'll understand your intent and work with Google Forms for you!",
       timestamp: new Date(),
     }
   ]);
@@ -185,7 +184,7 @@ export default function FormsPage() {
           const errorMessage: ChatMessage = {
             id: Date.now().toString(),
             type: 'assistant',
-            content: "⚠️ **Authentication Required**\n\nPlease sign in to use the Forms Assistant. You need to be authenticated to access your Google Forms.",
+            content: "âš ï¸ **Authentication Required**\n\nPlease sign in to use the Forms Assistant. You need to be authenticated to access your Google Forms.",
             timestamp: new Date(),
             error: true,
           };
@@ -199,7 +198,7 @@ export default function FormsPage() {
           const connectionMessage: ChatMessage = {
             id: Date.now().toString(),
             type: 'assistant',
-            content: "🔗 **Google Forms Connection Required**\n\nTo use the Forms Assistant, you need to connect your Google Forms account first. Please go to the Apps section in the dashboard and connect your Google Forms account.\n\nOnce connected, I'll be able to help you create, manage, and analyze your forms!",
+            content: "ðŸ”— **Google Forms Connection Required**\n\nTo use the Forms Assistant, you need to connect your Google Forms account first. Please go to the Apps section in the dashboard and connect your Google Forms account.\n\nOnce connected, I'll be able to help you create, manage, and analyze your forms!",
             timestamp: new Date(),
             error: true,
           };
@@ -208,7 +207,7 @@ export default function FormsPage() {
           const welcomeMessage: ChatMessage = {
             id: Date.now().toString(),
             type: 'assistant',
-            content: `🎉 **Connected Successfully!**\n\nYour Google Forms account (${status.email}) is connected and ready to use. I can now help you with all your Forms needs!\n\nWhat would you like to do first?`,
+            content: `ðŸŽ‰ **Connected Successfully!**\n\nYour Google Forms account (${status.email}) is connected and ready to use. I can now help you with all your Forms needs!\n\nWhat would you like to do first?`,
             timestamp: new Date(),
           };
           setMessages(prev => [...prev, welcomeMessage]);
@@ -218,7 +217,7 @@ export default function FormsPage() {
         const errorMessage: ChatMessage = {
           id: Date.now().toString(),
           type: 'assistant',
-          content: "❌ **Connection Error**\n\nThere was an error checking your Google Forms connection. Please try refreshing the page or check your connection in the dashboard.",
+          content: "âŒ **Connection Error**\n\nThere was an error checking your Google Forms connection. Please try refreshing the page or check your connection in the dashboard.",
           timestamp: new Date(),
           error: true,
         };
@@ -250,7 +249,7 @@ export default function FormsPage() {
     const loadingMessage: ChatMessage = {
       id: (Date.now() + 1).toString(),
       type: 'assistant',
-      content: '🔍 Processing your Forms request...',
+      content: 'ðŸ” Processing your Forms request...',
       timestamp: new Date(),
       isLoading: true,
     };
@@ -335,7 +334,7 @@ export default function FormsPage() {
       const errorMessage: ChatMessage = {
         id: Date.now().toString(),
         type: 'assistant',
-        content: `❌ **Error**: ${error.message || 'Failed to process your request. Please try again.'}`,
+        content: `âŒ **Error**: ${error.message || 'Failed to process your request. Please try again.'}`,
         timestamp: new Date(),
         error: true,
       };
@@ -360,7 +359,7 @@ export default function FormsPage() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center">
-              <FileText className="w-6 h-6" />
+              <span className="text-xl">ðŸ“‹</span>
             </div>
             <div>
               <h1 className="text-xl font-bold">Google Forms Assistant</h1>
@@ -390,9 +389,9 @@ export default function FormsPage() {
               {message.type === 'assistant' && (
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center flex-shrink-0">
                   {message.isLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <Sparkles className="w-5 h-5" />
+                    <span className="text-lg">âœ¨</span>
                   )}
                 </div>
               )}
@@ -409,7 +408,7 @@ export default function FormsPage() {
                 <div className="prose prose-invert max-w-none">
                   {message.isLoading ? (
                     <div className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       <span className="text-sm">{message.content}</span>
                     </div>
                   ) : message.type === 'assistant' ? (
@@ -423,7 +422,7 @@ export default function FormsPage() {
 
                 {message.metadata?.toolsUsed && message.metadata.toolsUsed.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-gray-700">
-                    <p className="text-xs text-gray-400 mb-2">🛠️ Tools used:</p>
+                    <p className="text-xs text-gray-400 mb-2">ðŸ› ï¸ Tools used:</p>
                     <div className="flex flex-wrap gap-2">
                       {message.metadata.toolsUsed.map((tool: any, index: number) => (
                         <span
@@ -444,7 +443,7 @@ export default function FormsPage() {
 
               {message.type === 'user' && (
                 <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
-                  <User className="w-5 h-5" />
+                  <span className="text-lg">ðŸ‘¤</span>
                 </div>
               )}
             </div>
@@ -477,9 +476,9 @@ export default function FormsPage() {
               className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed text-white p-4 rounded-2xl transition-all duration-200 transform hover:scale-105 active:scale-95"
             >
               {isLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <Send className="w-5 h-5" />
+                <span className="text-lg">â†’</span>
               )}
             </button>
           </div>
@@ -491,28 +490,28 @@ export default function FormsPage() {
               disabled={isLoading}
               className="text-xs bg-[#171717] hover:bg-[#252525] px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
             >
-              📋 List my forms
+              ðŸ“‹ List my forms
             </button>
             <button
               onClick={() => setInputValue("Create a feedback form")}
               disabled={isLoading}
               className="text-xs bg-[#171717] hover:bg-[#252525] px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
             >
-              ➕ Create feedback form
+              âž• Create feedback form
             </button>
             <button
               onClick={() => setInputValue("Create a customer satisfaction survey")}
               disabled={isLoading}
               className="text-xs bg-[#171717] hover:bg-[#252525] px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
             >
-              📊 Create survey
+              ðŸ“Š Create survey
             </button>
             <button
               onClick={() => setInputValue("Create an event registration form")}
               disabled={isLoading}
               className="text-xs bg-[#171717] hover:bg-[#252525] px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
             >
-              🎫 Event registration
+              ðŸŽ« Event registration
             </button>
           </div>
         </div>
@@ -520,3 +519,5 @@ export default function FormsPage() {
     </div>
   );
 }
+
+

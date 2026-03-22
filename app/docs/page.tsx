@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -56,13 +56,13 @@ export default function DocsPage() {
             content: `Hello! I'm your Google Docs AI assistant connected to ${status.email}. I can help you create, edit, read, and organize documents using natural language.
 
 **What I can do:**
-• Create new documents with specific titles
-• Write, insert, or append text to documents
-• Format text (bold, italic, colors)
-• Read and summarize document content
-• Search for text within documents
-• List, share, and manage your documents
-• Store memories and notes for cross-app context
+â€¢ Create new documents with specific titles
+â€¢ Write, insert, or append text to documents
+â€¢ Format text (bold, italic, colors)
+â€¢ Read and summarize document content
+â€¢ Search for text within documents
+â€¢ List, share, and manage your documents
+â€¢ Store memories and notes for cross-app context
 
 Try asking me to "Create a new document" or "List my documents"!`,
             timestamp: new Date(),
@@ -197,7 +197,7 @@ Try asking me to "Create a new document" or "List my documents"!`,
           number: docMatch[1],
           title: docMatch[2],
           url: docMatch[3],
-          details: details.length > 0 ? details.join(' • ') : 'No additional details'
+          details: details.length > 0 ? details.join(' â€¢ ') : 'No additional details'
         });
         continue;
       }
@@ -242,7 +242,7 @@ Try asking me to "Create a new document" or "List my documents"!`,
                         View Document
                       </a>
                       <div className="text-gray-600 text-sm">
-                        {doc.details.split('•').map((detail, idx) => (
+                        {doc.details.split('â€¢').map((detail, idx) => (
                           <div key={idx} className="flex items-start gap-1.5 mt-1">
                             <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -268,11 +268,11 @@ Try asking me to "Create a new document" or "List my documents"!`,
           if (!line.trim()) return <div key={lineIndex} className="h-2" />;
           
           // Handle bullet points
-          if (line.trim().startsWith('•') || line.trim().startsWith('-')) {
-            const text = line.replace(/^[•-]\s*/, '');
+          if (line.trim().startsWith('â€¢') || line.trim().startsWith('-')) {
+            const text = line.replace(/^[â€¢-]\s*/, '');
             return (
               <div key={lineIndex} className="flex items-start gap-2 ml-4">
-                <span className="text-blue-600 mt-1">•</span>
+                <span className="text-blue-600 mt-1">â€¢</span>
                 <span className="text-gray-800 flex-1">{formatInlineText(text)}</span>
               </div>
             );
@@ -401,7 +401,7 @@ Try asking me to "Create a new document" or "List my documents"!`,
             onClick={() => router.push('/dashboard')}
             className="mt-4 text-gray-600 hover:text-gray-800 text-sm"
           >
-            ← Back to Dashboard
+            â† Back to Dashboard
           </button>
         </div>
       </div>
@@ -448,37 +448,37 @@ Try asking me to "Create a new document" or "List my documents"!`,
 
         <div className="flex-1 overflow-y-auto p-6">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">
-            💡 What I Can Do
+            ðŸ’¡ What I Can Do
           </h3>
           <ul className="space-y-2 text-sm text-gray-600">
             <li className="flex items-start space-x-2">
-              <span className="text-blue-600">•</span>
+              <span className="text-blue-600">â€¢</span>
               <span>Create new documents</span>
             </li>
             <li className="flex items-start space-x-2">
-              <span className="text-blue-600">•</span>
+              <span className="text-blue-600">â€¢</span>
               <span>Write and edit content</span>
             </li>
             <li className="flex items-start space-x-2">
-              <span className="text-blue-600">•</span>
+              <span className="text-blue-600">â€¢</span>
               <span>Format text (bold, italic, color)</span>
             </li>
             <li className="flex items-start space-x-2">
-              <span className="text-blue-600">•</span>
+              <span className="text-blue-600">â€¢</span>
               <span>Read and summarize docs</span>
             </li>
             <li className="flex items-start space-x-2">
-              <span className="text-blue-600">•</span>
+              <span className="text-blue-600">â€¢</span>
               <span>Search within documents</span>
             </li>
             <li className="flex items-start space-x-2">
-              <span className="text-blue-600">•</span>
+              <span className="text-blue-600">â€¢</span>
               <span>Share and manage documents</span>
             </li>
           </ul>
 
           <h3 className="text-sm font-semibold text-gray-700 mt-6 mb-3">
-            📝 Example Queries
+            ðŸ“ Example Queries
           </h3>
           <div className="space-y-2">
             {[
@@ -503,7 +503,7 @@ Try asking me to "Create a new document" or "List my documents"!`,
             onClick={() => router.push('/dashboard')}
             className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
           >
-            ← Back to Dashboard
+            â† Back to Dashboard
           </button>
           <button
             onClick={handleDisconnect}
@@ -594,3 +594,6 @@ Try asking me to "Create a new document" or "List my documents"!`,
     </div>
   );
 }
+
+
+
