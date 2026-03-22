@@ -2867,7 +2867,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 message: chunk.message,
                 summary: chunk.summary,
                 currentChatId,
-                assistantMessageId,
               });
             } catch (_) {}
             setTimelineEvents((prev) => {
@@ -2897,7 +2896,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
 
             // Toast: action completed / needs input (debounced)
             try {
-              const dedupeKey = `confirm-task:${assistantMessageId || ''}:${chunk.eventId || ''}:${chunk.type}:${chunk.status || ''}:${chunk.message || chunk.summary || ''}`;
+              const dedupeKey = `confirm-task:${chunk.eventId || ''}:${chunk.type}:${chunk.status || ''}:${chunk.message || chunk.summary || ''}`;
               if (!taskToastDedupRef.current.has(dedupeKey)) {
                 taskToastDedupRef.current.add(dedupeKey);
                 const taskStatus = (chunk.status || 'completed') as TimelineEvent['status'];
@@ -2932,7 +2931,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 message: chunk.message,
                 summary: chunk.summary,
                 currentChatId,
-                assistantMessageId,
               });
             } catch (_) {}
             setTimelineEvents((prev) => {
@@ -2961,7 +2959,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
 
             // Toast: action failed (debounced)
             try {
-              const dedupeKey = `confirm-task:${assistantMessageId || ''}:${chunk.eventId || ''}:${chunk.type}:${chunk.message || chunk.summary || ''}`;
+              const dedupeKey = `confirm-task:${chunk.eventId || ''}:${chunk.type}:${chunk.message || chunk.summary || ''}`;
               if (!taskToastDedupRef.current.has(dedupeKey)) {
                 taskToastDedupRef.current.add(dedupeKey);
                 showToast({

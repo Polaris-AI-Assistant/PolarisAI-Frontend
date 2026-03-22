@@ -1,8 +1,14 @@
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import * as React from 'react'
+
+const ArrowRightIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="5" y1="12" x2="19" y2="12" />
+    <polyline points="12 5 19 12 12 19" />
+  </svg>
+)
 
 export default function IntegrationsSection() {
   return (
@@ -86,7 +92,7 @@ const IntegrationCard = ({
           <Button asChild variant="secondary" size="sm" className="gap-1 pr-2 shadow-none">
             <Link href={link}>
               Learn More
-              <ChevronRight className="ml-0 !size-3.5 opacity-50" />
+              <ArrowRightIcon className="ml-0 !size-3.5 opacity-50" />
             </Link>
           </Button>
         </div>

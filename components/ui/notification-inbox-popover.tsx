@@ -16,6 +16,17 @@ import {
   LucideIcon,
 } from "lucide-react";
 
+import { ReactNode } from "react";
+import type { ForwardRefExoticComponent, RefAttributes } from "react";
+
+interface LucideProps extends React.SVGAttributes<SVGSVGElement> {
+  color?: string;
+  fill?: string;
+  size?: string | number;
+}
+
+type IconComponent = ForwardRefExoticComponent<LucideProps & RefAttributes<SVGSVGElement>>;
+
 interface Notification {
   id: number;
   user: string;
@@ -23,7 +34,7 @@ interface Notification {
   target: string;
   timestamp: string;
   unread: boolean;
-  icon: LucideIcon;
+  icon: IconComponent;
 }
 
 const initialNotifications: Notification[] = [

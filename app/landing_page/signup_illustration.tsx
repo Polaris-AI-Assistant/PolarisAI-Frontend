@@ -1,9 +1,25 @@
 'use client'
 import React, { useEffect, useState } from 'react';
-import { User, Sparkles } from 'lucide-react';
 import { Space_Grotesk } from 'next/font/google';
 
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] });
+
+const User = ({ className }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+    </svg>
+);
+
+const Sparkles = ({ className }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M9.26 9a2 2 0 0 0-1.75 1M12.04 9a2 2 0 0 1 1.82 1M16.56 8.94a2 2 0 0 0 1.69-1" />
+        <path d="M3 21h18" />
+        <path d="M8.35 20.65l2.79-2.79M15.88 12.12a4 4 0 1 1 5.66-5.66" />
+        <path d="M12 8v-3.5a1.5 1.5 0 0 1 3 0V8" />
+        <path d="M12 8H9.5a1.5 1.5 0 0 0 0 3H12" />
+    </svg>
+);
 
 const SignUpIllustration = () => {
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
