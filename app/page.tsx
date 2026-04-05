@@ -6,6 +6,7 @@ import { isAuthenticated, getAuthToken, getRefreshToken } from '../lib/auth';
 import Hero from './landing_page/hero';
 import { Footer } from "@/components/ui/footer";
 import IntegrationsSection from './landing_page/integrations';
+import BentoGridShowcaseDemo from './landing_page/bentogrid_demo';
 
 const syncAuthToCookies = () => {
   const authToken = getAuthToken();
@@ -126,6 +127,7 @@ export default function Home() {
       <Hero />
       <div className="bg-black w-full">
         <IntegrationsSection/>
+        <BentoGridShowcaseDemo/>
         <Footer />
       </div>
     </>

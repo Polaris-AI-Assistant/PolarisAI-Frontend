@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDown, ChevronUp, Check, Clock, AlertCircle, Loader2, Sparkles, Calendar, FileText, Mail, Github, Map, Video, Table, Plane, Brain, Bot, Wrench, MessageSquare, Database, CheckCircle, XCircle } from 'lucide-react';
+import { DeepResearchIndicator, ResearchPhase } from './DeepResearchIndicator';
 
 // Timeline event types matching backend
 export type TimelineEventType = 
@@ -29,6 +30,8 @@ export type TimelineEventType =
   | 'timeline_confirmation_received'
   // Response generation
   | 'timeline_generating_response'
+  // Research progress
+  | 'timeline_research_step'
   // Completion
   | 'timeline_task_completed'
   | 'timeline_task_failed';
@@ -38,6 +41,7 @@ export interface TimelineEvent {
   type: TimelineEventType;
   timestamp: string;
   message?: string;
+  agentKey?: string;  // The actual agent identifier (e.g., 'research', 'gmail')
   agentName?: string;
   agentIcon?: string;
   agentDisplayName?: string;
@@ -49,6 +53,15 @@ export interface TimelineEvent {
   summary?: string;
   status?: 'pending' | 'in-progress' | 'completed' | 'failed' | 'needs_input';
   needsClarification?: boolean;
+  researchStep?: {
+    id: string;
+    action: 'planning' | 'searching' | 'reading' | 'analyzing' | 'synthesizing';
+    label: string;
+    detail?: string;
+    doneLabel: string;
+    sources?: string[];
+    status: 'idle' | 'active' | 'done' | 'error';
+  };
 }
 
 // Agent icon mapping
@@ -149,9 +162,15 @@ interface TimelineStepProps {
   isExpanded: boolean;
   onToggle: () => void;
   isLast: boolean;
+  researchPhases?: ResearchPhase[];
 }
 
-const TimelineStep: React.FC<TimelineStepProps> = ({ event, isExpanded, onToggle, isLast }) => {
+const TimelineStep: React.FC<TimelineStepProps> = ({ event, isExpanded, onToggle, isLast, researchPhases }) => {
+  // Log when research phases are provided
+  if (researchPhases && (event.agentKey === 'research' || event.agentKey === 'deep_research')) {
+    console.log('[Timeline] 🔍 Research event with phases:', event.type, event.agentKey, researchPhases);
+  }
+  
   // Determine status based on event type
   const getStatus = (): 'pending' | 'in-progress' | 'completed' | 'failed' => {
     // Check explicit status first (handle both backend format and frontend format)
@@ -332,6 +351,23 @@ const TimelineStep: React.FC<TimelineStepProps> = ({ event, isExpanded, onToggle
             )}
           </div>
         )}
+
+        {/* Show DeepResearchIndicator when this is the research agent step */}
+        {(() => {
+          const shouldShow = (event.type === 'timeline_agent_executing' || event.type === 'timeline_agent_completed') &&
+            (event.agentKey === 'research' || event.agentKey === 'deep_research') &&
+            researchPhases && researchPhases.length > 0;
+          
+          console.log('[Timeline] 🔍 DeepResearchIndicator check:', {
+            eventType: event.type,
+            agentKey: event.agentKey,
+            hasResearchPhases: !!researchPhases,
+            phasesLength: researchPhases?.length,
+            shouldShow
+          });
+          
+          return shouldShow ? <DeepResearchIndicator phases={researchPhases} /> : null;
+        })()}
       </div>
     </div>
   );
@@ -343,13 +379,15 @@ interface TimelineContainerProps {
   isVisible?: boolean;
   onToggleVisibility?: () => void;
   className?: string;
+  researchPhases?: ResearchPhase[];
 }
 
 export const TimelineContainer: React.FC<TimelineContainerProps> = ({ 
   events, 
   isVisible = true,
   onToggleVisibility,
-  className = ''
+  className = '',
+  researchPhases
 }) => {
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
@@ -378,10 +416,10 @@ export const TimelineContainer: React.FC<TimelineContainerProps> = ({
   }
 
   return (
-    <div className={`rounded-lg border border-neutral-800 bg-neutral-900 overflow-hidden ${className}`}>
+    <div className={className}>
       {/* Header with toggle */}
       <div 
-        className="flex items-center justify-between px-4 py-2 bg-neutral-800/50 border-b border-neutral-800 cursor-pointer hover:bg-neutral-800"
+        className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-neutral-800/30 rounded-lg"
         onClick={onToggleVisibility}
       >
         <div className="flex items-center gap-2">
@@ -410,7 +448,7 @@ export const TimelineContainer: React.FC<TimelineContainerProps> = ({
       {isVisible && (
         <div 
           ref={containerRef}
-          className="p-4 max-h-80 overflow-y-auto bg-neutral-900"
+          className="p-4"
         >
           {events.map((event, index) => (
             <TimelineStep
@@ -419,6 +457,7 @@ export const TimelineContainer: React.FC<TimelineContainerProps> = ({
               isExpanded={expandedEvents.has(event.eventId)}
               onToggle={() => toggleEvent(event.eventId)}
               isLast={index === events.length - 1}
+              researchPhases={researchPhases}
             />
           ))}
         </div>
