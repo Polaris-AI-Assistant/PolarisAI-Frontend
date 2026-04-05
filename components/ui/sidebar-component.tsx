@@ -427,7 +427,7 @@ function DetailSidebar({
 
   // When expanded, show full sidebar
   return (
-    <aside className="bg-neutral-900 flex flex-col gap-4 items-start p-4 w-80 h-screen overflow-hidden">
+    <aside className="bg-[#181818] flex flex-col gap-4 items-start p-4 w-80 h-screen overflow-hidden">
       <SectionTitle title={content.title} onToggleCollapse={onToggleCollapse} isCollapsed={isCollapsed} />
       <SearchContainer />
 

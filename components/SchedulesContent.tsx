@@ -620,7 +620,7 @@ export default function SchedulesContent() {
   ]
 
   return (
-    <div className="flex-1 flex flex-col bg-black overflow-hidden">
+    <div className="flex-1 flex flex-col bg-[#212121] overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 border-b border-white/[0.08] px-6 py-4">
         <div className="flex items-center justify-between">

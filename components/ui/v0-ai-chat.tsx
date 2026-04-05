@@ -100,6 +100,8 @@ interface VercelV0ChatProps {
     // Language props
     selectedLanguage?: string;
     onLanguageChange?: (lang: string) => void;
+    // Compact mode (smaller input after first message)
+    hasMessages?: boolean;
 }
 
 export function VercelV0Chat({
@@ -120,14 +122,16 @@ export function VercelV0Chat({
     voiceError = null,
     selectedLanguage = "en-US",
     onLanguageChange,
+    hasMessages = false,
 }: VercelV0ChatProps) {
     const [internalValue, setInternalValue] = useState("");
     const value = externalValue !== undefined ? externalValue : internalValue;
     const setValue = externalOnChange || setInternalValue;
     
+    // Use smaller height when there are messages
     const { textareaRef, adjustHeight } = useAutoResizeTextarea({
-        minHeight: 60,
-        maxHeight: 200,
+        minHeight: hasMessages ? 48 : 60,
+        maxHeight: hasMessages ? 120 : 200,
     });
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -198,7 +202,7 @@ export function VercelV0Chat({
                                 "focus:outline-none",
                                 "focus-visible:ring-0 focus-visible:ring-offset-0",
                                 "placeholder:text-neutral-500 placeholder:text-sm",
-                                "min-h-[60px]"
+                                hasMessages ? "min-h-[48px]" : "min-h-[60px]"
                             )}
                             style={{
                                 overflow: "hidden",

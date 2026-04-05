@@ -3407,7 +3407,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-black overflow-hidden h-full">
+    <div className="flex-1 flex flex-col bg-[#212121] overflow-hidden h-full">
       {showExamples && messages.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center w-full px-4">
           <div className="text-center mb-8">
@@ -3948,7 +3948,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             </div>
           </div>
       
-          <div className="bg-black p-6">
+          <div className="bg-[#212121] p-6">
             <div className="max-w-3xl mx-auto">
               <FileAttachment
                 ref={fileAttachmentRef}
@@ -3974,6 +3974,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 voiceError={voiceInput.error}
                 selectedLanguage={voiceLanguage}
                 onLanguageChange={setVoiceLanguage}
+                hasMessages={messages.length > 0}
               />
               <p className="text-xs text-gray-600 mt-3 text-center">
                 {isLoading ? 'Processing your request...' : 'The Main Agent can coordinate multiple services in a single query'}

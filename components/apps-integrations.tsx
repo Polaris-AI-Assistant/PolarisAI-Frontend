@@ -230,7 +230,7 @@ export default function AppsIntegrations({
   )
 
   return (
-    <section className="h-full overflow-auto bg-black">
+    <section className="h-full overflow-auto bg-[#212121]">
       <div className="py-10 px-8">
         <div className="mx-auto max-w-5xl">
           {/* Header with title on left and search on right */}
