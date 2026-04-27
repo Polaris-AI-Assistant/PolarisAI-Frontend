@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "./markdown.css";
@@ -209,3 +210,40 @@
     animation: spin-slow 30s linear infinite;
   }
 }
+
+/* ========== SHIKI CODE HIGHLIGHTING ========== */
+
+.shiki-container {
+  margin: 0;
+  line-height: 1.6;
+  font-family: 'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', 'Consolas', monospace;
+  font-size: 0.875rem;
+  font-feature-settings: '"liga" 1, "calt" 1';
+}
+
+.shiki-container pre {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  overflow: visible;
+}
+
+.shiki-container code {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* Shiki span styling - let Shiki handle exact colors */
+.shiki-container span {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Ensure line wrapping works properly */
+.shiki-container pre code {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  display: block;
+}
+

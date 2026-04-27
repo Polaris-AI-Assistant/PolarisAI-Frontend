@@ -66,7 +66,6 @@ import { Calendar, FileText, ClipboardList, Github, Video, Check, X, Mail, Alert
 import { MeetingCard } from '@/components/ui/meeting-card';
 import { FlightResultsInline, FlightData } from '@/components/ui/flight-results-card';
 import { TimelineContainer, TimelineEvent, TimelineEventType } from '@/components/Timeline';
-import { ResearchPhase, SearchQueryItem } from '@/components/DeepResearchIndicator';
 import { MarkdownContent } from '@/components/ui/MarkdownContent';
 import { FileGenerationPanel } from '@/components/ui/FileGenerationPanel';
 import { detectFileGenerationRequest } from '@/lib/fileGeneration';
@@ -1299,29 +1298,14 @@ export const CollapsibleConfirmedAction = ({
   content, 
   actionType, 
   agentName, 
-  description,
-  autoToggle = false,
-  autoToggleInterval = 4000
+  description 
 }: { 
   content: string; 
   actionType?: string; 
   agentName?: string; 
-  description?: string;
-  autoToggle?: boolean;
-  autoToggleInterval?: number;
+  description?: string; 
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-
-  // Auto-toggle effect
-  useEffect(() => {
-    if (!autoToggle) return;
-
-    const timer = setInterval(() => {
-      setIsExpanded(prev => !prev);
-    }, autoToggleInterval);
-
-    return () => clearInterval(timer);
-  }, [autoToggle, autoToggleInterval]);
   
   // Get the app logo
   const appLogo = getAppLogo(agentName, actionType);
@@ -1465,14 +1449,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
   const [timelineMessageId, setTimelineMessageId] = useState<string | null>(null);
   // Store persisted timeline events per message (for viewing historical timelines)
   const [messageTimelines, setMessageTimelines] = useState<Record<string, TimelineEvent[]>>({});
-
-  // Research steps state for deep research indicator
-  const [researchSteps, setResearchSteps] = useState<ResearchPhase[]>([
-    { id: 'planning', status: 'idle' },
-    { id: 'searching', status: 'idle', searchQueries: [] },
-    { id: 'analyzing', status: 'idle' },
-    { id: 'synthesizing', status: 'idle' },
-  ]);
 
   // Voice input and multi-language state
   const [voiceLanguage, setVoiceLanguage] = useState('en-US');
@@ -1966,13 +1942,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     setIsThinking(true);
     setThinkingMessage('Thinking...');
     setTimelineEvents([]); // Reset timeline for new query
-    setResearchSteps([ // Reset research steps for new query
-      { id: 'planning', action: 'planning', label: 'Planning research strategy', doneLabel: 'Research plan ready', status: 'idle', sources: [] },
-      { id: 'searching', action: 'searching', label: 'Searching the web', doneLabel: 'Found relevant results', status: 'idle', sources: [] },
-      { id: 'reading', action: 'reading', label: 'Reading sources', doneLabel: 'Content extracted', status: 'idle', sources: [] },
-      { id: 'analyzing', action: 'analyzing', label: 'Analyzing & cross-referencing', doneLabel: 'Analysis complete', status: 'idle', sources: [] },
-      { id: 'synthesizing', action: 'synthesizing', label: 'Synthesizing findings', doneLabel: 'Report ready', status: 'idle', sources: [] },
-    ]);
     
     const assistantMessageId = (Date.now() + 1).toString();
     setTimelineMessageId(assistantMessageId); // Associate timeline with this message
@@ -2026,10 +1995,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
         query, 
         conversationHistory, 
         (chunk: StreamChunk) => {
-        // Log all chunks to debug
-        if (chunk.type?.startsWith('timeline_')) {
-          console.log('[SSE] 📨 Received chunk:', chunk.type, chunk);
-        }
         switch (chunk.type) {
           case 'thinking':
             setIsThinking(chunk.status === 'start');
@@ -2452,7 +2417,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
               type: chunk.type,
               timestamp: chunk.timestamp || new Date().toISOString(),
               message: chunk.message,
-              agentKey: chunk.agentKey,  // ✅ ADD THIS LINE
               agentName: chunk.agentName,
               agentIcon: chunk.agentIcon,
               agentDisplayName: chunk.agentDisplayName,
@@ -2468,108 +2432,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 ? 'in-progress' : (chunk.status as 'completed' | 'in-progress' | 'failed' | 'pending' || 'completed'),
             };
             setTimelineEvents((prev) => [...prev, timelineEvent]);
-            
-            // Auto-activate planning step when research agent starts
-            if (chunk.type === 'timeline_agent_executing' && 
-                (chunk.agentKey === 'research' || chunk.agentKey === 'deep_research')) {
-              setResearchSteps(prev => prev.map(s =>
-                s.id === 'planning'
-                  ? { ...s, status: 'active' as const }
-                  : s
-              ));
-            }
-            break;
-          
-          // Research step updates for deep research indicator
-          case 'timeline_research_step':
-            console.log('[SSE] 📡 timeline_research_step received:', chunk);
-            if (chunk.researchStep) {
-              const step = chunk.researchStep;
-              console.log('[SSE] ✅ Processing research step:', step.id, step.status);
-              
-              setResearchSteps(prev => {
-                const updated = prev.map(phase => {
-                // Handle non-searching phases
-                if (phase.id !== 'searching') {
-                  if (phase.id === step.id) {
-                    return {
-                      ...phase,
-                      status: step.status ?? phase.status,
-                      planTitle: step.planTitle ?? phase.planTitle,
-                      totalSources: step.totalSources ?? phase.totalSources,
-                      totalSearches: step.totalSearches ?? phase.totalSearches,
-                      wordCount: step.wordCount ?? phase.wordCount,
-                      replanningTriggered: step.replanningTriggered ?? false,
-                    };
-                  }
-                  return phase;
-                }
-                
-                // Handle searching phase with searchQuery updates
-                if (phase.id === 'searching' && step.id === 'searching') {
-                  // Check for replanning indicator
-                  if (step.replanningTriggered) {
-                    return {
-                      ...phase,
-                      status: step.status ?? phase.status,
-                      replanningPoints: phase.replanningPoints
-                        ? [...phase.replanningPoints, (phase.searchQueries?.length ?? 0)]
-                        : [(phase.searchQueries?.length ?? 0)],
-                    };
-                  }
-                  
-                  // Handle regular status/source updates
-                  if (!step.searchQuery) {
-                    return {
-                      ...phase,
-                      status: step.status ?? phase.status,
-                      totalSources: step.totalSources ?? phase.totalSources,
-                      totalSearches: step.totalSearches ?? phase.totalSearches,
-                    };
-                  }
-                  
-                  const sq = step.searchQuery;
-                  const existing = phase.searchQueries?.find(q => q.id === sq.id);
-                  
-                  if (!existing) {
-                    // New query starting
-                    return {
-                      ...phase,
-                      status: step.status ?? phase.status,
-                      searchQueries: [
-                        ...(phase.searchQueries || []),
-                        {
-                          id: sq.id,
-                          text: sq.text,
-                          rawText: sq.rawText,
-                          status: 'active' as const,
-                          sources: [],
-                        },
-                      ],
-                    };
-                  }
-                  
-                  // Update existing query — add source or mark done
-                  return {
-                    ...phase,
-                    status: step.status ?? phase.status,
-                    searchQueries: phase.searchQueries!.map(q =>
-                      q.id !== sq.id ? q : {
-                        ...q,
-                        status: sq.status ?? q.status,
-                        sources: sq.addSource ? [...q.sources, sq.addSource] : q.sources,
-                        sourceCount: sq.sourceCount ?? q.sourceCount,
-                      }
-                    ),
-                  };
-                }
-                
-                return phase;
-              });
-              console.log('[SSE] 🔄 Updated research steps:', updated);
-              return updated;
-            });
-            }
             break;
           
           case 'file_generated':
@@ -3135,7 +2997,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
               type: chunk.type,
               timestamp: chunk.timestamp || new Date().toISOString(),
               message: chunk.message,
-              agentKey: chunk.agentKey,  // ✅ ADD THIS LINE
               agentName: chunk.agentName,
               agentIcon: chunk.agentIcon,
               agentDisplayName: chunk.agentDisplayName,
@@ -3151,16 +3012,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 ? 'in-progress' : (chunk.status as 'completed' | 'in-progress' | 'failed' | 'pending' || 'completed'),
             };
             setTimelineEvents((prev) => [...prev, confirmTimelineEvent]);
-            
-            // Auto-activate planning step when research agent starts (confirmation flow)
-            if (chunk.type === 'timeline_agent_executing' && 
-                (chunk.agentKey === 'research' || chunk.agentKey === 'deep_research')) {
-              setResearchSteps(prev => prev.map(s =>
-                s.id === 'planning'
-                  ? { ...s, status: 'active' as const }
-                  : s
-              ));
-            }
             break;
 
           case 'error':
@@ -3469,7 +3320,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 },
               ]}
             />
-            <p className="text-xs text-gray-600 mt-3 text-center">
+            <p className="text-xs text-white mt-3 text-center">
               {isLoading ? 'Processing your request...' : 'The Main Agent can coordinate multiple services in a single query'}
             </p>
           </div>
@@ -3572,7 +3423,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                             events={timelineEvents}
                             isVisible={showTimeline}
                             onToggleVisibility={() => setShowTimeline(!showTimeline)}
-                            researchPhases={researchSteps}
                           />
                         </div>
                       ) : (messageTimelines[message.id] && messageTimelines[message.id].length > 0) && (
@@ -3581,7 +3431,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                             events={messageTimelines[message.id]}
                             isVisible={showTimeline}
                             onToggleVisibility={() => setShowTimeline(!showTimeline)}
-                            researchPhases={researchSteps}
                           />
                         </div>
                       )}
@@ -3937,7 +3786,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                       events={timelineEvents}
                       isVisible={showTimeline}
                       onToggleVisibility={() => setShowTimeline(!showTimeline)}
-                      researchPhases={researchSteps}
                     />
                   )}
                   <ThinkingIndicator message={thinkingMessage} />
@@ -3948,7 +3796,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             </div>
           </div>
       
-          <div className="bg-[#212121] p-6">
+          <div className="bg-[#212121]">
             <div className="max-w-3xl mx-auto">
               <FileAttachment
                 ref={fileAttachmentRef}
@@ -3974,7 +3822,6 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 voiceError={voiceInput.error}
                 selectedLanguage={voiceLanguage}
                 onLanguageChange={setVoiceLanguage}
-                hasMessages={messages.length > 0}
               />
               <p className="text-xs text-gray-600 mt-3 text-center">
                 {isLoading ? 'Processing your request...' : 'The Main Agent can coordinate multiple services in a single query'}

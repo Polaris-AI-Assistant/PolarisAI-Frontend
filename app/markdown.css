@@ -1,16 +1,19 @@
 /* ==============================================
    MARKDOWN STYLES FOR AI RESPONSES
-   Matches the dark theme of PolarisAI
+   Premium Developer Documentation Theme
+   Inspired by Vercel, Stripe, shadcn/ui
    ============================================== */
 
 /* ---- Base container ---- */
 .markdown-body {
-  font-family: Inter, 'Inter Fallback', -apple-system, BlinkMacSystemFont,
-    'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  color: #e5e5e5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  color: #F0F0F0;
   line-height: 1.65;
   word-wrap: break-word;
   overflow-wrap: break-word;
+  letter-spacing: -0.005em;
 }
 
 .markdown-body > *:first-child {
@@ -23,59 +26,68 @@
 
 /* ---- Headings ---- */
 .markdown-h1 {
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 700;
-  line-height: 2.15rem;
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
-  color: #ffffff;
-  letter-spacing: -0.02em;
+  line-height: 2.4rem;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: #E6EDF3;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #E6EDF3 0%, #C9D1D9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .markdown-h2 {
-  font-size: 1.375rem;
-  font-weight: 600;
-  line-height: 1.85rem;
-  margin-top: 1.4rem;
-  margin-bottom: 0.6rem;
-  color: #ffffff;
-  letter-spacing: -0.015em;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 2rem;
+  margin-top: 1.8rem;
+  margin-bottom: 0.8rem;
+  color: #E6EDF3;
+  letter-spacing: -0.02em;
+  position: relative;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .markdown-h3 {
-  font-size: 1.15rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  line-height: 1.625rem;
-  margin-top: 1.25rem;
-  margin-bottom: 0.5rem;
-  color: #f0f0f0;
+  line-height: 1.75rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.6rem;
+  color: #E6EDF3;
+  letter-spacing: -0.015em;
 }
 
 .markdown-h4 {
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  line-height: 1.5rem;
-  margin-top: 1rem;
-  margin-bottom: 0.4rem;
-  color: #e5e5e5;
+  line-height: 1.6rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  color: #D2A8FF;
 }
 
 .markdown-h5,
 .markdown-h6 {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
-  line-height: 1.4rem;
-  margin-top: 0.75rem;
-  margin-bottom: 0.35rem;
-  color: #d4d4d4;
+  line-height: 1.5rem;
+  margin-top: 1rem;
+  margin-bottom: 0.4rem;
+  color: #B1BAC4;
 }
 
 /* ---- Paragraphs & inline text ---- */
 .markdown-p {
-  font-size: 0.9375rem;
-  line-height: 1.625rem;
-  margin-bottom: 0.85rem;
-  color: #e5e5e5;
+  font-size: 1rem;
+  line-height: 1.7rem;
+  margin-bottom: 1rem;
+  color: #F0F0F0;
+  letter-spacing: -0.005em;
 }
 
 .markdown-p:last-child {
@@ -84,30 +96,41 @@
 
 .markdown-strong {
   font-weight: 600;
-  color: #ffffff;
+  color: #E6EDF3;
 }
 
 .markdown-em {
   font-style: italic;
-  color: #e5e5e5;
+  color: #B1BAC4;
+  opacity: 0.9;
 }
 
 /* ---- Inline code ---- */
 .markdown-inline-code {
-  font-family: 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 0.8125rem;
-  padding: 0.125rem 0.4rem;
-  background-color: rgba(255, 255, 255, 0.08);
-  border-radius: 0.25rem;
-  color: #fbbf24;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: 'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', 'Consolas', 
+    'Monaco', 'Courier New', monospace;
+  font-size: 0.875rem;
+  padding: 0.2rem 0.5rem;
+  background: linear-gradient(135deg, rgba(13, 17, 23, 0.8), rgba(11, 15, 20, 0.8));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.375rem;
+  color: #A5D6FF;
+  font-weight: 500;
+  font-feature-settings: '"liga" 1, "calt" 1';
+  transition: all 0.2s ease;
+}
+
+.markdown-inline-code:hover {
+  background: linear-gradient(135deg, rgba(13, 17, 23, 0.95), rgba(11, 15, 20, 0.95));
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(165, 214, 255, 0.1);
 }
 
 /* ---- Lists ---- */
 .markdown-ul,
 .markdown-ol {
-  margin: 0.75rem 0;
-  padding-left: 1.5rem;
+  margin: 1rem 0;
+  padding-left: 2rem;
 }
 
 .markdown-ul {
@@ -119,22 +142,23 @@
 }
 
 .markdown-li {
-  font-size: 0.9375rem;
-  line-height: 1.625rem;
-  margin-bottom: 0.35rem;
-  color: #e5e5e5;
-  padding-left: 0.35rem;
+  font-size: 1rem;
+  line-height: 1.7rem;
+  margin-bottom: 0.5rem;
+  color: #F0F0F0;
+  padding-left: 0.5rem;
 }
 
 .markdown-li::marker {
-  color: #9ca3af;
+  color: #8B949E;
+  font-weight: 500;
 }
 
 /* Nested lists */
 .markdown-ul .markdown-ul,
 .markdown-ol .markdown-ul {
-  margin-top: 0.35rem;
-  margin-bottom: 0.35rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
   list-style-type: circle;
 }
 
@@ -144,38 +168,49 @@
 
 /* ---- Links ---- */
 .markdown-link {
-  color: #60a5fa;
+  color: #58A6FF;
   text-decoration: none;
   border-bottom: 1px solid transparent;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
+  font-weight: 500;
 }
 
 .markdown-link:hover {
-  color: #93c5fd;
-  border-bottom-color: #60a5fa;
+  color: #79C0FF;
+  border-bottom-color: #58A6FF;
+  background: rgba(88, 166, 255, 0.08);
+  padding: 0 0.25rem;
+  border-radius: 0.25rem;
 }
 
 /* ---- Blockquotes ---- */
 .markdown-blockquote {
-  margin: 1rem 0;
-  padding: 0.65rem 1rem;
-  border-left: 3px solid #4ade80;
-  background-color: rgba(74, 222, 128, 0.06);
-  border-radius: 0 0.375rem 0.375rem 0;
+  margin: 1.25rem 0;
+  padding: 0.875rem 1.25rem;
+  border-left: 4px solid #58A6FF;
+  background: linear-gradient(90deg, rgba(88, 166, 255, 0.08), transparent);
+  border-radius: 0 0.5rem 0.5rem 0;
+  border-top: 1px solid rgba(88, 166, 255, 0.08);
+  border-right: 1px solid rgba(88, 166, 255, 0.04);
+  border-bottom: 1px solid rgba(88, 166, 255, 0.04);
 }
 
 .markdown-blockquote p {
   margin: 0;
-  color: #d4d4d4;
+  color: #B1BAC4;
   font-style: italic;
+  font-size: 0.95rem;
+  line-height: 1.6rem;
 }
 
 /* ---- Tables ---- */
 .markdown-table-wrapper {
   overflow-x: auto;
-  margin: 1rem 0;
-  border-radius: 0.5rem;
+  margin: 1.5rem 0;
+  border-radius: 0.75rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, rgba(13, 17, 23, 0.4), rgba(11, 15, 20, 0.4));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 .markdown-table {
@@ -184,50 +219,76 @@
 }
 
 .markdown-thead {
-  background-color: rgba(255, 255, 255, 0.04);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
 }
 
 .markdown-th {
-  padding: 0.6rem 1rem;
+  padding: 0.875rem 1.25rem;
   text-align: left;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: #ffffff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #E6EDF3;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.12);
   white-space: nowrap;
+  font-feature-settings: '"tnum" 1';
 }
 
 .markdown-td {
-  padding: 0.55rem 1rem;
+  padding: 0.75rem 1.25rem;
   font-size: 0.875rem;
-  color: #e5e5e5;
+  color: #F0F0F0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .markdown-tr:last-child .markdown-td {
-  border-bottom: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .markdown-tr:hover {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: rgba(255, 255, 255, 0.04);
 }
 
 /* ---- Horizontal rule ---- */
 .markdown-hr {
-  margin: 1.5rem 0;
+  margin: 2rem 0;
   border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+}
+
+/* ---- Images ---- */
+.markdown-img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
+  margin: 1.5rem 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
+
+.markdown-img:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 /* ---- Responsive ---- */
 @media (max-width: 768px) {
   .markdown-h1 {
-    font-size: 1.4rem;
+    font-size: 1.5rem;
   }
   .markdown-h2 {
-    font-size: 1.2rem;
+    font-size: 1.25rem;
   }
   .markdown-h3 {
-    font-size: 1.05rem;
+    font-size: 1.1rem;
+  }
+  .markdown-th {
+    padding: 0.75rem 0.875rem;
+    font-size: 0.75rem;
+  }
+  .markdown-td {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.8125rem;
   }
 }

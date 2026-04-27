@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Check } from 'lucide-react';
 
 interface CodeBlockProps {
@@ -34,48 +34,67 @@ export function CodeBlock({ language, code }: CodeBlockProps) {
   }, [code]);
 
   return (
-    <div className="my-4 rounded-lg overflow-hidden border border-white/[0.08] bg-[#1e1e1e]" role="region" aria-label="Code block">
+    <div 
+      className="my-4 rounded-2xl overflow-hidden border border-white/[0.08] bg-gradient-to-b from-[#0D1117] to-[#0B0F14] transition-all duration-300 hover:border-white/[0.12] group" 
+      role="region" 
+      aria-label="Code block"
+      style={{
+        boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+      }}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-white/[0.08]">
-        <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+      <div className="flex items-center justify-between px-5 py-3.5 bg-gradient-to-r from-white/[0.02] to-white/[0.01] border-b border-white/[0.05]">
+        <span className="text-xs font-semibold text-white/[0.6] uppercase tracking-widest flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-white/[0.3]"></span>
           {language || 'text'}
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-white/[0.08] hover:bg-white/[0.15] border border-white/[0.1] hover:border-white/[0.2] text-gray-300 transition-all duration-200 active:scale-95"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] hover:border-white/[0.15] text-white/[0.7] hover:text-white/[0.9] transition-all duration-200 active:scale-95 group/btn"
           aria-label={copied ? 'Code copied' : 'Copy code to clipboard'}
           aria-live="polite"
         >
           {copied ? (
             <>
-              <Check className="w-3 h-3 text-emerald-400" />
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
               <span className="text-emerald-400">Copied</span>
             </>
           ) : (
             <>
-              <Copy className="w-3 h-3" />
+              <Copy className="w-3.5 h-3.5" />
               <span>Copy</span>
             </>
           )}
         </button>
       </div>
       {/* Code */}
-      <SyntaxHighlighter
-        language={language || 'text'}
-        style={vscDarkPlus}
-        customStyle={{
-          margin: 0,
-          borderRadius: 0,
-          fontSize: '0.8125rem',
-          lineHeight: '1.5rem',
-          padding: '1rem',
-          background: '#1e1e1e',
-        }}
-        wrapLongLines={true}
-        showLineNumbers={false}
-      >
-        {code}
-      </SyntaxHighlighter>
+      <div className="overflow-x-auto">
+        <SyntaxHighlighter
+          language={language || 'text'}
+          style={atomDark}
+          customStyle={{
+            margin: 0,
+            borderRadius: 0,
+            fontSize: '0.875rem',
+            lineHeight: '1.6',
+            padding: '1.25rem 1.5rem',
+            background: 'transparent',
+            fontFamily: "'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', 'Consolas', monospace",
+            fontFeatureSettings: '"liga" 1, "calt" 1',
+          }}
+          wrapLongLines={true}
+          showLineNumbers={false}
+          codeTagProps={{
+            style: {
+              fontFamily: 'inherit',
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+            }
+          }}
+        >
+          {code}
+        </SyntaxHighlighter>
+      </div>
     </div>
   );
 }

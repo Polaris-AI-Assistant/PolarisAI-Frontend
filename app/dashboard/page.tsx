@@ -1179,7 +1179,7 @@ function Dashboard() {
       <SocketStatusBadge />
 
       {/* Sidebar */}
-  <div className="w-72 bg-[#171717] text-white flex flex-col h-screen">
+  <div className="w-72 bg-[#181818] text-white flex flex-col h-screen">
         {/* Logo/Brand Section */}
   <div className="p-4 flex-shrink-0">
           <div className="flex items-center space-x-3">
@@ -1442,7 +1442,7 @@ function Dashboard() {
       </div>
 
           {/* Profile Dropdown at bottom - fixed */}
-          <div className="p-4 pt-4 border-t border-[#404040] flex-shrink-0 bg-[#171717]">
+          <div className="p-4 pt-4 border-t border-[#404040] flex-shrink-0 bg-[#181818]">
             <ProfileDropdown 
               data={{
                 name: user ? (user.first_name ? `${user.first_name}${user.last_name ? ' ' + user.last_name : ''}` : user.email.split('@')[0]) : 'User',
@@ -1456,7 +1456,7 @@ function Dashboard() {
       </div>
 
       {/* Main Content */}
-  <div className="flex-1 flex flex-col bg-black">
+  <div className="flex-1 flex flex-col bg-[#212121]">
         {activeTab === 'MainAgent' ? (
           /* Main Agent Chat Content */
           <MainAgentContent 

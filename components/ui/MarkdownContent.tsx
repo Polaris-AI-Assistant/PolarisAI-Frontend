@@ -4,7 +4,7 @@ import React, { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
-import { CodeBlock } from './CodeBlock';
+import { CodeBlockShiki } from './CodeBlockShiki';
 
 interface MarkdownContentProps {
   content: string;
@@ -26,7 +26,7 @@ const MarkdownContent = memo(function MarkdownContent({ content }: MarkdownConte
       const isBlock = code.includes('\n') || (className && className.startsWith('language-'));
 
       if (isBlock) {
-        return <CodeBlock language={language} code={code} />;
+        return <CodeBlockShiki language={language} code={code} />;
       }
 
       return (

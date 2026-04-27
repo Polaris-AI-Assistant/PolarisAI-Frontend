@@ -5,6 +5,21 @@ import { motion } from 'motion/react';
 
 import { cn } from '../../lib/utils';
 
+interface ScrambleHoverProps {
+  text: string;
+  scrambleSpeed?: number;
+  maxIterations?: number;
+  useOriginalCharsOnly?: boolean;
+  characters?: string;
+  className?: string;
+  scrambledClassName?: string;
+  sequential?: boolean;
+  revealDirection?: 'start' | 'end' | 'center';
+  isHovering?: boolean;
+  setIsHovering?: (hovering: boolean) => void;
+  [key: string]: any;
+}
+
 const ScrambleHover = ({
   text,
   scrambleSpeed = 50,
@@ -18,13 +33,13 @@ const ScrambleHover = ({
   isHovering,
   setIsHovering,
   ...props
-}) => {
+}: ScrambleHoverProps) => {
   const [displayText, setDisplayText] = useState(text);
   const [isScrambling, setIsScrambling] = useState(false);
   const [revealedIndices, setRevealedIndices] = useState(new Set());
 
   useEffect(() => {
-    let interval;
+    let interval: NodeJS.Timeout | undefined;
     let currentIteration = 0;
 
     const getNextIndex = () => {
@@ -59,7 +74,7 @@ const ScrambleHover = ({
       }
     };
 
-    const shuffleText = (text) => {
+    const shuffleText = (text: string) => {
       if (useOriginalCharsOnly) {
         const positions = text.split('').map((char, i) => ({
           char,
