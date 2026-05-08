@@ -1464,6 +1464,8 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
   const shouldSaveRef = useRef<boolean>(false);
   const isSavingRef = useRef<boolean>(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   // Voice input hook
   const voiceInput = useVoiceInput({
@@ -1840,6 +1842,18 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
+  const handleStopStreaming = () => {
+    if (abortControllerRef.current) {
+      console.log('[Streaming] Stopping stream...');
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsStreaming(false);
+      setIsLoading(false);
+      setIsThinking(false);
+      setIsConfirming(false);
+    }
+  };
+
   const handleSendMessage = async (queryText?: string) => {
     const query = queryText || input.trim();
     
@@ -1986,6 +2000,10 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
           content: query,
         }
       ];
+
+      // Create abort controller for this request
+      abortControllerRef.current = new AbortController();
+      setIsStreaming(true);
 
       // Extract file IDs from attached files
       const fileIds = messageFiles.map(f => f.id);
@@ -2540,9 +2558,26 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             });
             break;
         }
-      }, currentChatId || undefined, userLocation, assistantMessageId, fileIds, userMessage.id, getResponseLanguageForQuery(userMessage.content));  // Strict per-message response language
+      }, currentChatId || undefined, userLocation, assistantMessageId, fileIds, userMessage.id, getResponseLanguageForQuery(userMessage.content), abortControllerRef.current?.signal);  // Strict per-message response language with abort signal
 
     } catch (error: any) {
+      // Check if error is due to abort
+      if (error.name === 'AbortError') {
+        console.log('[Streaming] Request aborted by user - preserving partial response');
+        // Just save the current state without modifying the content
+        // The message already has the partial content from streaming
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+        
+        saveTimeoutRef.current = setTimeout(() => {
+          saveMessagesToDB(messages);
+          saveTimeoutRef.current = null;
+        }, 200);
+        
+        return;
+      }
+      
       if (error.message && (error.message.includes('Session expired') || error.message.includes('Authentication required'))) {
         router.push('/auth/signin');
         return;
@@ -2574,6 +2609,8 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       setIsLoading(false);
       setIsThinking(false);
       setStreamingMessageId(null);
+      setIsStreaming(false);
+      abortControllerRef.current = null;
       streamingContentRef.current = '';
       metadataRef.current = {};
       shouldSaveRef.current = false;
@@ -2591,6 +2628,10 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     setIsConfirming(true);
     setIsThinking(true);
     setThinkingMessage('Executing your confirmed action...');
+
+    // Create abort controller for this request
+    abortControllerRef.current = new AbortController();
+    setIsStreaming(true);
 
     // Create a new assistant message for the execution response
     const responseMessageId = (Date.now() + 1).toString();
@@ -3053,8 +3094,25 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             });
             break;
         }
-      }, { messageId: timelineMessageId || responseMessageId, chatId: currentChatId || undefined });
+      }, { messageId: timelineMessageId || responseMessageId, chatId: currentChatId || undefined, abortSignal: abortControllerRef.current?.signal });
     } catch (error: any) {
+      // Check if error is due to abort
+      if (error.name === 'AbortError') {
+        console.log('[Streaming] Confirmation request aborted by user - preserving partial response');
+        // Just save the current state without modifying the content
+        // The message already has the partial content from streaming
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+        
+        saveTimeoutRef.current = setTimeout(() => {
+          saveMessagesToDB(messages);
+          saveTimeoutRef.current = null;
+        }, 200);
+        
+        return;
+      }
+      
       if (error.message && (error.message.includes('Session expired') || error.message.includes('Authentication required'))) {
         router.push('/auth/signin');
         return;
@@ -3075,6 +3133,8 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       setIsConfirming(false);
       setIsThinking(false);
       setStreamingMessageId(null);
+      setIsStreaming(false);
+      abortControllerRef.current = null;
       // Only clear pendingConfirmation if we didn't receive a new one (action chain)
       if (!receivedNewConfirmation) {
         setPendingConfirmation(null);
@@ -3809,8 +3869,10 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 value={input}
                 onChange={setInput}
                 onSubmit={handleSendMessage}
+                onStopStreaming={handleStopStreaming}
                 placeholder="Ask me anything... (e.g., 'schedule a meeting and create a document')"
                 disabled={isLoading}
+                isStreaming={isStreaming}
                 showExamples={false}
                 onAttachFile={handleAttachFile}
                 attachedFiles={attachedFiles}

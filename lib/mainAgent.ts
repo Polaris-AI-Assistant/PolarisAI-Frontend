@@ -154,7 +154,8 @@ export async function processQueryStreaming(
   messageId?: string,  // Optional: for storing timeline events
   fileIds?: string[],  // Optional: for file context
   userMessageId?: string,  // Optional: user message ID for linking files
-  responseLanguage?: string  // Optional: for multi-language response support
+  responseLanguage?: string,  // Optional: for multi-language response support
+  abortSignal?: AbortSignal  // Optional: for aborting the request
 ): Promise<void> {
   // Import auth functions dynamically to avoid circular dependencies
   const { getAuthToken, refreshAuthToken } = await import('./auth');
@@ -184,6 +185,7 @@ export async function processQueryStreaming(
         userMessageId,  // Pass userMessageId for linking files to user message
         responseLanguage,  // Pass responseLanguage for multi-language support
       }),
+      signal: abortSignal,  // Pass abort signal to fetch
     });
   };
 
@@ -492,7 +494,7 @@ export function getAgentColor(agentKey: string): string {
 export async function confirmActionStreaming(
   requestId: string,
   onChunk: (chunk: StreamChunk) => void,
-  options?: { messageId?: string; chatId?: string }
+  options?: { messageId?: string; chatId?: string; abortSignal?: AbortSignal }
 ): Promise<void> {
   const { getAuthToken, refreshAuthToken } = await import('./auth');
   
@@ -514,6 +516,7 @@ export async function confirmActionStreaming(
         messageId: options?.messageId,
         chatId: options?.chatId
       }),
+      signal: options?.abortSignal,  // Pass abort signal to fetch
     });
   };
 
