@@ -74,8 +74,10 @@ interface VercelV0ChatProps {
     value?: string;
     onChange?: (value: string) => void;
     onSubmit?: (value: string) => void;
+    onStopStreaming?: () => void;
     placeholder?: string;
     disabled?: boolean;
+    isStreaming?: boolean;
     showExamples?: boolean;
     examples?: Array<{
         icon: React.ReactNode;
@@ -99,8 +101,10 @@ export function VercelV0Chat({
     value: externalValue,
     onChange: externalOnChange,
     onSubmit,
+    onStopStreaming,
     placeholder = "Ask me anything...",
     disabled = false,
+    isStreaming = false,
     showExamples = true,
     examples,
     onAttachFile,
@@ -263,26 +267,38 @@ export function VercelV0Chat({
                             </div>
                         )}
 
-                        {/* Send button — white background */}
-                        <button
-                            type="button"
-                            onClick={handleSubmit}
-                            disabled={!value.trim() || disabled}
-                            className={cn(
-                                "flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-95",
-                                value.trim() && !disabled
-                                    ? "bg-white hover:bg-gray-200 shadow-md"
-                                    : "bg-neutral-700 cursor-not-allowed"
-                            )}
-                        >
-                            <ArrowUpIcon
+                        {/* Send/Stop button — white background for send, red for stop */}
+                        {isStreaming ? (
+                            <button
+                                type="button"
+                                onClick={onStopStreaming}
+                                className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-95 bg-neutral-700 hover:bg-neutral-600"
+                                title="Stop streaming"
+                            >
+                                <Square className="w-3.5 h-3.5 text-white fill-white" />
+                                <span className="sr-only">Stop streaming</span>
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleSubmit}
+                                disabled={!value.trim() || disabled}
                                 className={cn(
-                                    "w-4 h-4",
-                                    value.trim() && !disabled ? "text-black" : "text-neutral-500"
+                                    "flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-95",
+                                    value.trim() && !disabled
+                                        ? "bg-white hover:bg-gray-200 shadow-md"
+                                        : "bg-neutral-700 cursor-not-allowed"
                                 )}
-                            />
-                            <span className="sr-only">Send</span>
-                        </button>
+                            >
+                                <ArrowUpIcon
+                                    className={cn(
+                                        "w-4 h-4",
+                                        value.trim() && !disabled ? "text-black" : "text-neutral-500"
+                                    )}
+                                />
+                                <span className="sr-only">Send</span>
+                            </button>
+                        )}
                     </div>
 
                     {/* Voice error toast */}
