@@ -8,13 +8,17 @@ import { CodeBlockShiki } from './CodeBlockShiki';
 
 interface MarkdownContentProps {
   content: string;
+  isStreaming?: boolean; // Add streaming indicator
 }
 
 /**
  * MarkdownContent — renders AI markdown responses with proper formatting,
  * syntax-highlighted code blocks, tables, blockquotes, etc.
+ * 
+ * @param content - The markdown content to render
+ * @param isStreaming - Whether the content is currently being streamed (prevents flickering)
  */
-const MarkdownContent = memo(function MarkdownContent({ content }: MarkdownContentProps) {
+const MarkdownContent = memo(function MarkdownContent({ content, isStreaming = false }: MarkdownContentProps) {
   const components: Components = {
     // ---------- Code ----------
     code({ className, children, ...props }) {
@@ -26,7 +30,7 @@ const MarkdownContent = memo(function MarkdownContent({ content }: MarkdownConte
       const isBlock = code.includes('\n') || (className && className.startsWith('language-'));
 
       if (isBlock) {
-        return <CodeBlockShiki language={language} code={code} />;
+        return <CodeBlockShiki language={language} code={code} isStreaming={isStreaming} />;
       }
 
       return (
@@ -163,6 +167,11 @@ const MarkdownContent = memo(function MarkdownContent({ content }: MarkdownConte
       </ReactMarkdown>
     </div>
   );
+}, (prevProps, nextProps) => {
+  // Custom comparison function to prevent unnecessary re-renders
+  // Only re-render if content actually changed or streaming status changed
+  return prevProps.content === nextProps.content && 
+         prevProps.isStreaming === nextProps.isStreaming;
 });
 
 export { MarkdownContent };

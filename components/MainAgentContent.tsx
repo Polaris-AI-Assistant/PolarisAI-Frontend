@@ -6,25 +6,26 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { useToast } from '@/contexts/ToastContext';
+import { useSettings } from '@/contexts/SettingsContext';
 
 // Custom scrollbar styles
-const scrollbarStyles = `
+const getScrollbarStyles = (isDark: boolean) => `
   .custom-scrollbar::-webkit-scrollbar {
     width: 8px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: black;
+    background: ${isDark ? 'black' : '#f5f5f5'};
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #262626;
+    background: ${isDark ? '#262626' : '#d1d5db'};
     border-radius: 4px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #404040;
+    background: ${isDark ? '#404040' : '#9ca3af'};
   }
 `;
 
-import { isAuthenticated } from '../lib/auth';
+import { isAuthenticated, getStoredUser } from '../lib/auth';
 import {
   processQueryStreaming,
   StreamChunk,
@@ -54,6 +55,7 @@ import {
   TimelineEventData,
 } from '../lib/chatHistory';
 import { addMemory } from '../lib/memory';
+import { getDynamicGreeting } from '../lib/utils';
 import { getUserLocation, requiresLocation } from '../lib/geolocation';
 import { useLocationStore } from '../lib/stores/locationStore';
 import { getSupabaseClient, ChatMessageRow, rowToChatMessage } from '../lib/supabase';
@@ -66,6 +68,7 @@ import { Calendar, FileText, ClipboardList, Github, Video, Check, X, Mail, Alert
 import { MeetingCard } from '@/components/ui/meeting-card';
 import { FlightResultsInline, FlightData } from '@/components/ui/flight-results-card';
 import { TimelineContainer, TimelineEvent, TimelineEventType } from '@/components/Timeline';
+import { DeepResearchIndicator, ResearchPhase } from '@/components/DeepResearchIndicator';
 import { MarkdownContent } from '@/components/ui/MarkdownContent';
 import { FileGenerationPanel } from '@/components/ui/FileGenerationPanel';
 import { detectFileGenerationRequest } from '@/lib/fileGeneration';
@@ -346,8 +349,46 @@ const extractFlightInfo = (content: string): FlightData | null => {
   }> = [];
 
   // ── PRIMARY: parse from markdown table rows ──────────────────────────────
-  // Handles tables like:
-  // | IndiGo 6E 6798 | IndiGo | 00:15 | 01:35 | 80 min | ₹4683 | Direct |
+  // Handles TWO table formats:
+  // Format 1: | IndiGo 6E 6798 | IndiGo | 00:15 | 01:35 | 80 min | ₹4683 | Direct |
+  // Format 2: | IndiGo | 6E 2419 | 2026-05-10 05:05 | 2026-05-10 07:15 | 2h 10m | ₹7,756 |
+  
+  // Try Format 2 first (with date-time format)
+  const tableRowRegex2 = /\|\s*([^|\n]+?)\s*\|\s*([A-Z0-9\s]+?)\s*\|\s*\d{4}-\d{2}-\d{2}\s+(\d{1,2}:\d{2})\s*\|\s*\d{4}-\d{2}-\d{2}\s+(\d{1,2}:\d{2})\s*\|\s*([^|\n]+?)\s*\|\s*₹?\s*([\d,]+)\s*\|/gim;
+  for (const m of content.matchAll(tableRowRegex2)) {
+    const airline = m[1].trim();
+    const flightNumber = m[2].trim().replace(/\s+/g, '');
+    const depTime = m[3].trim();
+    const arrTime = m[4].trim();
+    const durationStr = m[5].trim();
+    const price = parseInt(m[6].replace(/,/g, ''));
+    
+    // Skip header rows
+    if (/^airline$/i.test(airline) || !depTime.match(/\d{1,2}:\d{2}/) || price < 100) continue;
+    
+    console.log('[Flight Extraction Format 2] Parsed flight:', {
+      airline,
+      flightNumber,
+      depTime,
+      arrTime,
+      price,
+      duration: durationStr
+    });
+    
+    flights.push({
+      airline: airline || 'Unknown Airline',
+      flightNumber: flightNumber || undefined,
+      price,
+      departureTime: depTime,
+      arrivalTime: arrTime,
+      duration: durationStr,
+      stops: 0, // Assume direct for this format
+      airplane: ''
+    });
+  }
+  
+  // Try Format 1 if Format 2 didn't find anything
+  if (flights.length === 0) {
   const tableRowRegex = /\|\s*([^|\n-][^|\n]*?)\s*\|\s*([^|\n-][^|\n]*?)\s*\|\s*(\d{1,2}:\d{2}(?:\s*[AP]M)?)\s*\|\s*(\d{1,2}:\d{2}(?:\s*[AP]M)?)\s*\|\s*([^|\n]+?)\s*\|\s*(?:₹\s*)?((?:[\d,]+))\s*\|\s*([^|\n]*?)\s*\|/gim;
   for (const m of content.matchAll(tableRowRegex)) {
     const colA = m[1].trim();   // e.g. "IndiGo 6E 6798" or flight number
@@ -357,19 +398,48 @@ const extractFlightInfo = (content: string): FlightData | null => {
     const durationStr = m[5].trim(); // e.g. "80 min" or "1 hr 15 min"
     const price = parseInt(m[6].replace(/,/g, ''));
     const flightType = m[7].trim().toLowerCase();
+    
     // Skip header rows (they won't have numeric times, but just in case)
     if (!depTime.match(/\d{1,2}:\d{2}/) || price < 100) continue;
-    // Resolve airline
+    
+    // Resolve airline - try multiple strategies
     let resolvedAirline = colB;
-    if (!resolvedAirline || /^airline$/i.test(resolvedAirline.trim())) {
-      const fnCode = colA.match(/([A-Z0-9]{2})\s*\d{2,4}/i)?.[1]?.toUpperCase();
-      resolvedAirline = fnCode ? (airlineCodeMap2[fnCode] || colA) : colA;
+    let flightNumber: string | undefined;
+    
+    // If colB is empty or generic, try to extract from colA
+    if (!resolvedAirline || /^airline$/i.test(resolvedAirline.trim()) || resolvedAirline.trim() === '') {
+      // Try to extract airline name from colA (e.g., "IndiGo 6E 6798")
+      const airlineMatch = colA.match(/^(Air India Express|Air India|IndiGo|SpiceJet|Vistara|Akasa Air|Go First|AirAsia India|Alliance Air|Emirates|Qatar|Lufthansa|British Airways|Etihad)/i);
+      if (airlineMatch) {
+        resolvedAirline = airlineMatch[1];
+      } else {
+        // Try to derive from flight code
+        const fnCode = colA.match(/([A-Z0-9]{2})\s*\d{2,4}/i)?.[1]?.toUpperCase();
+        resolvedAirline = fnCode ? (airlineCodeMap2[fnCode] || colA) : colA;
+      }
     }
+    
     // Extract flight number from colA if present
     const fnMatch = colA.match(/([A-Z]{1,2})\s*(\d{3,4})/i);
-    const flightNumber = fnMatch ? `${fnMatch[1]}${fnMatch[2]}` : undefined;
+    flightNumber = fnMatch ? `${fnMatch[1]}${fnMatch[2]}` : undefined;
+    
+    // If still no airline name, use the first part of colA
+    if (!resolvedAirline || resolvedAirline.trim() === '') {
+      resolvedAirline = colA.split(/\s+/)[0] || 'Airline';
+    }
+    
     const stops = (flightType.includes('direct') || flightType.includes('non-stop')) ? 0
       : (/\d/.test(flightType) ? (parseInt(flightType) || 1) : (flightType.includes('stop') ? 1 : 0));
+    
+    console.log('[Flight Extraction Format 1] Parsed flight:', {
+      airline: resolvedAirline,
+      flightNumber,
+      depTime,
+      arrTime,
+      price,
+      duration: durationStr
+    });
+    
     flights.push({
       airline: resolvedAirline,
       flightNumber,
@@ -380,6 +450,7 @@ const extractFlightInfo = (content: string): FlightData | null => {
       stops,
       airplane: ''
     });
+  }
   }
   // Skip the text-based parsing below if table parsing already found flights
   const tableFlightsFound = flights.length > 0;
@@ -571,22 +642,26 @@ const extractFlightInfo = (content: string): FlightData | null => {
 
   // Map to the nested structure expected by FlightResultsCard
   const mapToFlightStructure = (f: typeof validFlights[0]) => {
+    console.log('[Flight Mapping] Creating flight structure for:', f);
+    
     const baseFlightLeg = {
-      airline: f.airline,
-      flight_number: f.flightNumber,
+      airline: f.airline || 'Unknown Airline',
+      flight_number: f.flightNumber || '',
       departure_airport: {
         name: origin,
         id: getAirportCode(origin),
-        time: f.departureTime
+        time: f.departureTime || '00:00'
       },
       arrival_airport: {
         name: destination,
         id: getAirportCode(destination),
-        time: f.arrivalTime
+        time: f.arrivalTime || '00:00'
       },
       duration: f.duration ? parseDurationToMinutes(f.duration) : 120,
       airplane: f.airplane || ''
     };
+
+    console.log('[Flight Mapping] Base flight leg:', baseFlightLeg);
 
     // For connecting flights (stops > 0), create multiple flight legs
     if (f.stops > 0) {
@@ -595,7 +670,7 @@ const extractFlightInfo = (content: string): FlightData | null => {
       for (let i = 1; i <= f.stops; i++) {
         flightLegs.push({
           ...baseFlightLeg,
-          flight_number: f.flightNumber
+          flight_number: f.flightNumber || ''
         });
       }
       return {
@@ -607,21 +682,28 @@ const extractFlightInfo = (content: string): FlightData | null => {
     }
 
     // Direct flight
-    return {
+    const result = {
       price: f.price,
       total_duration: f.duration ? parseDurationToMinutes(f.duration) : 120,
       flights: [baseFlightLeg],
       layovers: []
     };
+    
+    console.log('[Flight Mapping] Final flight structure:', result);
+    return result;
   };
 
-  return {
+  const flightData = {
     from: origin,
     to: destination,
     date: dateMatch ? dateMatch[1] : new Date().toLocaleDateString(),
     best_flights: validFlights.slice(0, 3).map(mapToFlightStructure),
     other_flights: validFlights.slice(3).map(mapToFlightStructure)
   };
+  
+  console.log('[Flight Extraction] Final flight data:', flightData);
+  
+  return flightData;
 };
 
 // Helper to get airport code from city name
@@ -1413,14 +1495,17 @@ interface MainAgentContentProps {
 export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentProps) {
   const router = useRouter();
   const { showToast } = useToast();
+  const { themeMode } = useSettings();
   const taskToastDedupRef = useRef<Set<string>>(new Set());
   const [currentChatId, setCurrentChatId] = useState<string | null>(chatId || null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [thinkingMessage, setThinkingMessage] = useState('Thinking...');
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [examples, setExamples] = useState<any>(null);
   const [showExamples, setShowExamples] = useState(true);
   const [agentHealth, setAgentHealth] = useState<any>(null);
@@ -1449,6 +1534,9 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
   const [timelineMessageId, setTimelineMessageId] = useState<string | null>(null);
   // Store persisted timeline events per message (for viewing historical timelines)
   const [messageTimelines, setMessageTimelines] = useState<Record<string, TimelineEvent[]>>({});
+  // Research phases state - track deep research progress
+  const [researchPhases, setResearchPhases] = useState<ResearchPhase[]>([]);
+  const [messageResearchPhases, setMessageResearchPhases] = useState<Record<string, ResearchPhase[]>>({});
 
   // Voice input and multi-language state
   const [voiceLanguage, setVoiceLanguage] = useState('en-US');
@@ -1479,6 +1567,9 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       console.error('[VoiceInput] Error:', error);
     },
   });
+
+  // Dynamic greeting state
+  const [greeting, setGreeting] = useState<string>('How can we help you today?');
 
   // TTS hook for reading assistant messages
   const tts = useTTS({ language: voiceLanguage });
@@ -1544,6 +1635,14 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
 
     initializeChat();
   }, [router, chatId]);
+
+  // Initialize dynamic greeting
+  useEffect(() => {
+    const user = getStoredUser();
+    const userName = user?.display_name || user?.first_name || user?.email?.split('@')[0] || 'there';
+    const dynamicGreeting = getDynamicGreeting(userName);
+    setGreeting(dynamicGreeting);
+  }, []);
 
   // Handle chatId changes from parent (dashboard sidebar)
   // This handles both selecting existing chats and creating new chats
@@ -1942,6 +2041,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
     setIsThinking(true);
     setThinkingMessage('Thinking...');
     setTimelineEvents([]); // Reset timeline for new query
+    setResearchPhases([]); // Reset research phases for new query
     
     const assistantMessageId = (Date.now() + 1).toString();
     setTimelineMessageId(assistantMessageId); // Associate timeline with this message
@@ -1989,6 +2089,9 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
 
       // Extract file IDs from attached files
       const fileIds = messageFiles.map(f => f.id);
+
+      // Create abort controller for this request
+      abortControllerRef.current = new AbortController();
 
       // Pass currentChatId as conversationId for artifact memory and userLocation for Maps
       await processQueryStreaming(
@@ -2399,6 +2502,119 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             } catch (_) {}
             break;
           
+          case 'timeline_research_step':
+            // Handle deep research progress updates
+            console.log('[MainAgent] 📡 Research progress update received:', chunk.type, chunk.researchStep);
+            console.log('[MainAgent] 📡 Full chunk:', JSON.stringify(chunk, null, 2));
+            if (chunk.researchStep) {
+              const step = chunk.researchStep;
+              console.log('[MainAgent] ✅ Forwarding research step to timeline:', step);
+              console.log('[MainAgent] 📊 Current research phases before update:', researchPhases);
+              
+              setResearchPhases((prev) => {
+                const updated = [...prev];
+                const phaseIndex = updated.findIndex(p => p.id === step.id);
+                
+                console.log('[MainAgent] 🔍 Phase index:', phaseIndex, 'for step.id:', step.id);
+                
+                if (phaseIndex >= 0) {
+                  // Update existing phase
+                  const existingPhase = updated[phaseIndex];
+                  
+                  // Handle search query updates
+                  if (step.searchQuery) {
+                    console.log('[MainAgent] 🔍 Processing search query:', step.searchQuery);
+                    const searchQueries = existingPhase.searchQueries || [];
+                    const queryIndex = searchQueries.findIndex(q => q.id === step.searchQuery.id);
+                    
+                    if (queryIndex >= 0) {
+                      // Update existing query
+                      const existingQuery = searchQueries[queryIndex];
+                      
+                      // Handle adding a source
+                      if (step.searchQuery.addSource) {
+                        console.log('[MainAgent] ➕ Adding source:', step.searchQuery.addSource);
+                        searchQueries[queryIndex] = {
+                          ...existingQuery,
+                          sources: [...existingQuery.sources, step.searchQuery.addSource],
+                        };
+                      } else {
+                        // Update query status and other fields
+                        console.log('[MainAgent] 🔄 Updating query status');
+                        searchQueries[queryIndex] = {
+                          ...existingQuery,
+                          ...step.searchQuery,
+                          sources: existingQuery.sources, // Preserve sources
+                        };
+                      }
+                    } else {
+                      // Add new query
+                      console.log('[MainAgent] ➕ Adding new query:', step.searchQuery.id);
+                      searchQueries.push({
+                        id: step.searchQuery.id,
+                        text: step.searchQuery.text,
+                        rawText: step.searchQuery.rawText,
+                        status: step.searchQuery.status || 'active',
+                        sources: step.searchQuery.addSource ? [step.searchQuery.addSource] : [],
+                        sourceCount: step.searchQuery.sourceCount,
+                      });
+                    }
+                    
+                    updated[phaseIndex] = {
+                      ...existingPhase,
+                      searchQueries,
+                      status: step.status || existingPhase.status,
+                    };
+                  } else if (step.replanningTriggered) {
+                    // Mark replanning point
+                    console.log('[MainAgent] 🔄 Replanning triggered');
+                    const currentQueryCount = existingPhase.searchQueries?.length || 0;
+                    updated[phaseIndex] = {
+                      ...existingPhase,
+                      replanningPoints: [...(existingPhase.replanningPoints || []), currentQueryCount - 1],
+                      status: step.status || existingPhase.status,
+                    };
+                  } else {
+                    // General phase update
+                    console.log('[MainAgent] 🔄 General phase update');
+                    updated[phaseIndex] = {
+                      ...existingPhase,
+                      ...step,
+                      status: step.status || existingPhase.status,
+                      searchQueries: existingPhase.searchQueries, // Preserve queries
+                      replanningPoints: existingPhase.replanningPoints, // Preserve replanning points
+                    };
+                  }
+                } else {
+                  // Add new phase
+                  console.log('[MainAgent] ➕ Adding new phase:', step.id);
+                  updated.push({
+                    id: step.id,
+                    status: step.status || 'idle',
+                    planTitle: step.planTitle,
+                    searchQueries: step.searchQuery ? [{
+                      id: step.searchQuery.id,
+                      text: step.searchQuery.text,
+                      rawText: step.searchQuery.rawText,
+                      status: step.searchQuery.status || 'active',
+                      sources: step.searchQuery.addSource ? [step.searchQuery.addSource] : [],
+                      sourceCount: step.searchQuery.sourceCount,
+                    }] : [],
+                    replanningPoints: [],
+                    totalSources: step.totalSources,
+                    totalSearches: step.totalSearches,
+                    wordCount: step.wordCount,
+                  });
+                }
+                
+                console.log('[MainAgent] 📊 Updated research phases:', updated);
+                return updated;
+              });
+            } else {
+              console.log('[MainAgent] ⚠️ No researchStep in chunk');
+            }
+            break;
+          
           case 'timeline_plan':
           case 'timeline_agent_added':
           case 'timeline_agent_executing':
@@ -2509,6 +2725,14 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
               [assistantMessageId]: [...timelineEvents],
             }));
             
+            // Store research phases for this message
+            if (researchPhases.length > 0) {
+              setMessageResearchPhases((prev) => ({
+                ...prev,
+                [assistantMessageId]: [...researchPhases],
+              }));
+            }
+            
             setMessages((prev) => {
               const updatedMessages = prev.map((m) => {
                 if (m.id === assistantMessageId) {
@@ -2540,36 +2764,46 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             });
             break;
         }
-      }, currentChatId || undefined, userLocation, assistantMessageId, fileIds, userMessage.id, getResponseLanguageForQuery(userMessage.content));  // Strict per-message response language
+      }, currentChatId || undefined, userLocation, assistantMessageId, fileIds, userMessage.id, getResponseLanguageForQuery(userMessage.content), abortControllerRef.current.signal);  // Strict per-message response language with abort support
 
     } catch (error: any) {
-      if (error.message && (error.message.includes('Session expired') || error.message.includes('Authentication required'))) {
-        router.push('/auth/signin');
-        return;
-      }
+      // Check if this is an intentional abort (user clicked stop)
+      const isAbortError = error.name === 'AbortError' || error.message?.includes('aborted');
       
-      setMessages((prev) => {
-        const updatedMessages = prev.map((m) =>
-          m.id === assistantMessageId
-            ? {
-                ...m,
-                content: `Error: ${error.message || 'Failed to process your request. Please try again.'}`,
-                isError: true,
-              }
-            : m
-        );
-        
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
+      if (isAbortError) {
+        // For abort errors, the partial content is already saved in handlePauseResponse
+        // Just update the UI state silently
+        console.log('[MainAgent] Response stopped by user, partial content already saved');
+      } else {
+        // For actual errors, show error message
+        if (error.message && (error.message.includes('Session expired') || error.message.includes('Authentication required'))) {
+          router.push('/auth/signin');
+          return;
         }
         
-        saveTimeoutRef.current = setTimeout(() => {
-          saveMessagesToDB(updatedMessages);
-          saveTimeoutRef.current = null;
-        }, 200);
-        
-        return updatedMessages;
-      });
+        setMessages((prev) => {
+          const updatedMessages = prev.map((m) =>
+            m.id === assistantMessageId
+              ? {
+                  ...m,
+                  content: `Error: ${error.message || 'Failed to process your request. Please try again.'}`,
+                  isError: true,
+                }
+              : m
+          );
+          
+          if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+          }
+          
+          saveTimeoutRef.current = setTimeout(() => {
+            saveMessagesToDB(updatedMessages);
+            saveTimeoutRef.current = null;
+          }, 200);
+          
+          return updatedMessages;
+        });
+      }
     } finally {
       setIsLoading(false);
       setIsThinking(false);
@@ -2980,6 +3214,106 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             } catch (_) {}
             break;
           
+          case 'timeline_research_step':
+            // Handle deep research progress updates (confirmation flow)
+            console.log('[MainAgent] 📡 Research progress update received (confirm):', chunk.type, chunk.researchStep);
+            if (chunk.researchStep) {
+              const step = chunk.researchStep;
+              console.log('[MainAgent] ✅ Forwarding research step to timeline (confirm):', step);
+              
+              setResearchPhases((prev) => {
+                const updated = [...prev];
+                const phaseIndex = updated.findIndex(p => p.id === step.id);
+                
+                if (phaseIndex >= 0) {
+                  // Update existing phase
+                  const existingPhase = updated[phaseIndex];
+                  
+                  // Handle search query updates
+                  if (step.searchQuery) {
+                    const searchQueries = existingPhase.searchQueries || [];
+                    const queryIndex = searchQueries.findIndex(q => q.id === step.searchQuery.id);
+                    
+                    if (queryIndex >= 0) {
+                      // Update existing query
+                      const existingQuery = searchQueries[queryIndex];
+                      
+                      // Handle adding a source
+                      if (step.searchQuery.addSource) {
+                        searchQueries[queryIndex] = {
+                          ...existingQuery,
+                          sources: [...existingQuery.sources, step.searchQuery.addSource],
+                        };
+                      } else {
+                        // Update query status and other fields
+                        searchQueries[queryIndex] = {
+                          ...existingQuery,
+                          ...step.searchQuery,
+                          sources: existingQuery.sources, // Preserve sources
+                        };
+                      }
+                    } else {
+                      // Add new query
+                      searchQueries.push({
+                        id: step.searchQuery.id,
+                        text: step.searchQuery.text,
+                        rawText: step.searchQuery.rawText,
+                        status: step.searchQuery.status || 'active',
+                        sources: step.searchQuery.addSource ? [step.searchQuery.addSource] : [],
+                        sourceCount: step.searchQuery.sourceCount,
+                      });
+                    }
+                    
+                    updated[phaseIndex] = {
+                      ...existingPhase,
+                      searchQueries,
+                      status: step.status || existingPhase.status,
+                    };
+                  } else if (step.replanningTriggered) {
+                    // Mark replanning point
+                    const currentQueryCount = existingPhase.searchQueries?.length || 0;
+                    updated[phaseIndex] = {
+                      ...existingPhase,
+                      replanningPoints: [...(existingPhase.replanningPoints || []), currentQueryCount - 1],
+                      status: step.status || existingPhase.status,
+                    };
+                  } else {
+                    // General phase update
+                    updated[phaseIndex] = {
+                      ...existingPhase,
+                      ...step,
+                      status: step.status || existingPhase.status,
+                      searchQueries: existingPhase.searchQueries, // Preserve queries
+                      replanningPoints: existingPhase.replanningPoints, // Preserve replanning points
+                    };
+                  }
+                } else {
+                  // Add new phase
+                  updated.push({
+                    id: step.id,
+                    status: step.status || 'idle',
+                    planTitle: step.planTitle,
+                    searchQueries: step.searchQuery ? [{
+                      id: step.searchQuery.id,
+                      text: step.searchQuery.text,
+                      rawText: step.searchQuery.rawText,
+                      status: step.searchQuery.status || 'active',
+                      sources: step.searchQuery.addSource ? [step.searchQuery.addSource] : [],
+                      sourceCount: step.searchQuery.sourceCount,
+                    }] : [],
+                    replanningPoints: [],
+                    totalSources: step.totalSources,
+                    totalSearches: step.totalSearches,
+                    wordCount: step.wordCount,
+                  });
+                }
+                
+                console.log('[MainAgent] 📊 Updated research phases (confirm):', updated);
+                return updated;
+              });
+            }
+            break;
+          
           case 'timeline_plan':
           case 'timeline_agent_added':
           case 'timeline_agent_executing':
@@ -3027,6 +3361,22 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             
             const finalContent = streamingContentRef.current;
             const finalMetadata = { ...metadataRef.current };
+
+            // Store timeline events for this message in local state for future viewing
+            if (responseMessageId) {
+              setMessageTimelines((prev) => ({
+                ...prev,
+                [responseMessageId]: [...timelineEvents],
+              }));
+              
+              // Store research phases for this message
+              if (researchPhases.length > 0) {
+                setMessageResearchPhases((prev) => ({
+                  ...prev,
+                  [responseMessageId]: [...researchPhases],
+                }));
+              }
+            }
 
             setMessages((prev) => {
               const updatedMessages = prev.map((m) =>
@@ -3082,6 +3432,61 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       streamingContentRef.current = '';
       metadataRef.current = {};
       inputRef.current?.focus();
+    }
+  };
+
+  /**
+   * Handle pausing/stopping the streaming response
+   */
+  const handlePauseResponse = () => {
+    if (abortControllerRef.current) {
+      console.log('[MainAgent] ⏸️ Pausing response generation');
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      
+      // Save the current partial content to database
+      const finalContent = streamingContentRef.current;
+      const finalMetadata = { ...metadataRef.current };
+      
+      setMessages((prev) => {
+        const updatedMessages = prev.map((m) =>
+          m.id === streamingMessageId
+            ? {
+                ...m,
+                content: finalContent + '\n\n_[Response paused by user]_',
+                agentsUsed: finalMetadata.agentsUsed,
+                processingTime: finalMetadata.processingTime,
+              }
+            : m
+        );
+        
+        // Save to database
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+        
+        saveTimeoutRef.current = setTimeout(() => {
+          saveMessagesToDB(updatedMessages);
+          saveTimeoutRef.current = null;
+        }, 200);
+        
+        return updatedMessages;
+      });
+      
+      // Reset states
+      setIsLoading(false);
+      setIsThinking(false);
+      setIsPaused(false);
+      setStreamingMessageId(null);
+      streamingContentRef.current = '';
+      metadataRef.current = {};
+      
+      showToast({
+        title: 'Response paused',
+        message: 'The response generation has been stopped',
+        variant: 'default',
+        duration: 3000,
+      });
     }
   };
 
@@ -3258,12 +3663,12 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#212121] overflow-hidden h-full">
+    <div className={`flex-1 flex flex-col overflow-hidden h-full ${themeMode === 'light' ? 'bg-white' : 'bg-[#212121]'}`}>
       {showExamples && messages.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center w-full px-4">
           <div className="text-center mb-8">
-            <h2 className="text-4xl font-bold text-white mb-3">
-              How can we help you today?
+            <h2 className={`text-4xl font-bold mb-3 ${themeMode === 'light' ? 'text-black' : 'text-white'}`}>
+              {greeting}
             </h2>
           </div>
           
@@ -3320,7 +3725,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 },
               ]}
             />
-            <p className="text-xs text-white mt-3 text-center">
+            <p className={`text-xs mt-3 text-center ${themeMode === 'light' ? 'text-gray-600' : 'text-white'}`}>
               {isLoading ? 'Processing your request...' : 'The Main Agent can coordinate multiple services in a single query'}
             </p>
           </div>
@@ -3328,7 +3733,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
       ) : (
         <>
           <div className="flex-1 overflow-y-auto px-4 py-6 custom-scrollbar">
-            <style>{scrollbarStyles}</style>
+            <style>{getScrollbarStyles(themeMode === 'dark')}</style>
             <div className="max-w-4xl mx-auto space-y-6 w-full">
               {messages.map((message) => (
                 <div
@@ -3336,7 +3741,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {message.role === 'user' ? (
-                    <div className="max-w-3xl rounded-2xl px-6 py-2 bg-neutral-900 border border-neutral-800">
+                    <div className={`max-w-3xl rounded-2xl px-6 py-2 border ${themeMode === 'light' ? 'bg-gray-100 border-gray-300 text-black' : 'bg-neutral-900 border-neutral-800 text-white'}`}>
                       {/* File previews - shown above message text like ChatGPT */}
                       {message.files && message.files.length > 0 && (
                         <div className={`flex flex-wrap gap-2 ${message.content ? 'mb-3 pb-2' : ''}`}>
@@ -3407,7 +3812,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                           lineHeight: '26px',
                           fontWeight: 400,
                           letterSpacing: 'normal',
-                          color: '#F1F2F5'
+                          color: themeMode === 'light' ? '#000000' : '#F1F2F5'
                         }}
                       >
                         {message.content}
@@ -3423,6 +3828,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                             events={timelineEvents}
                             isVisible={showTimeline}
                             onToggleVisibility={() => setShowTimeline(!showTimeline)}
+                            researchPhases={researchPhases.length > 0 ? researchPhases : undefined}
                           />
                         </div>
                       ) : (messageTimelines[message.id] && messageTimelines[message.id].length > 0) && (
@@ -3431,13 +3837,14 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                             events={messageTimelines[message.id]}
                             isVisible={showTimeline}
                             onToggleVisibility={() => setShowTimeline(!showTimeline)}
+                            researchPhases={messageResearchPhases[message.id]}
                           />
                         </div>
                       )}
                       
                       {/* Message content based on type */}
                       {message.isError ? (
-                        <div className="rounded-2xl px-6 py-2 bg-red-500/10 border border-red-500/30 text-red-400">
+                        <div className={`rounded-2xl px-6 py-2 ${themeMode === 'light' ? 'bg-red-50 border border-red-300 text-red-700' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
                           <div className="whitespace-pre-wrap">{message.content}</div>
                         </div>
                       ) : (message as any).isPendingConfirmation ? (
@@ -3594,7 +4001,10 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                           color: '#F1F2F5'
                         }}
                       >
-                        <MarkdownContent content={message.content} />
+                        <MarkdownContent 
+                          content={message.content} 
+                          isStreaming={message.id === streamingMessageId}
+                        />
                       </div>
                       
                       {/* File Generation Panel for exporting content */}
@@ -3786,6 +4196,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                       events={timelineEvents}
                       isVisible={showTimeline}
                       onToggleVisibility={() => setShowTimeline(!showTimeline)}
+                      researchPhases={researchPhases.length > 0 ? researchPhases : undefined}
                     />
                   )}
                   <ThinkingIndicator message={thinkingMessage} />
@@ -3796,7 +4207,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             </div>
           </div>
       
-          <div className="bg-[#212121]">
+          <div className={themeMode === 'light' ? 'bg-white' : 'bg-[#212121]'}>
             <div className="max-w-3xl mx-auto">
               <FileAttachment
                 ref={fileAttachmentRef}
@@ -3805,6 +4216,23 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 attachedFiles={attachedFiles}
                 disabled={isLoading}
               />
+
+              {/* Pause button - shown during streaming */}
+              {isLoading && streamingMessageId && (
+                <div className="flex justify-center mb-3">
+                  <button
+                    onClick={handlePauseResponse}
+                    className="flex items-center gap-2 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-full transition-colors border border-neutral-600"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <rect x="6" y="4" width="4" height="16" rx="1" />
+                      <rect x="14" y="4" width="4" height="16" rx="1" />
+                    </svg>
+                    <span className="text-sm font-medium">Stop generating</span>
+                  </button>
+                </div>
+              )}
+
               <VercelV0Chat
                 value={input}
                 onChange={setInput}
@@ -3823,7 +4251,7 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 selectedLanguage={voiceLanguage}
                 onLanguageChange={setVoiceLanguage}
               />
-              <p className="text-xs text-gray-600 mt-3 text-center">
+              <p className={`text-xs mt-3 text-center ${themeMode === 'light' ? 'text-gray-600' : 'text-gray-500'}`}>
                 {isLoading ? 'Processing your request...' : 'The Main Agent can coordinate multiple services in a single query'}
               </p>
             </div>

@@ -216,4 +216,6 @@ const Toaster = forwardRef<ToasterRef, { defaultPosition?: Position }>(
   }
 );
 
+Toaster.displayName = 'Toaster';
+
 export default Toaster;

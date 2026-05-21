@@ -100,7 +100,7 @@ const DeepResearch: React.FC = () => {
         setShowPlanModal(true);
       });
 
-      // Listen for research progress updates
+      // Listen for research progress updates (direct from research controller)
       socket.on('research:progress', (data: ProgressUpdate) => {
         console.log('Research progress:', data);
         
@@ -117,9 +117,70 @@ const DeepResearch: React.FC = () => {
         });
       });
 
+      // Listen for timeline events (when research is triggered from main chat)
+      socket.on('timeline_event', (event: any) => {
+        console.log('[DeepResearch] Timeline event received:', event);
+        
+        // Check if this is a research step event
+        if (event.type === 'timeline_research_step' && event.data) {
+          const data = event.data;
+          console.log('[DeepResearch] Research step data:', data);
+          
+          // Update progress based on research step
+          if (data.id === 'searching' && data.searchQuery) {
+            const query = data.searchQuery;
+            let message = '';
+            let step = 'searching';
+            let progressPercent = 25;
+            
+            if (query.status === 'active') {
+              if (query.addSource) {
+                message = `🌐 Fetching: ${query.addSource}`;
+                step = 'fetching';
+                progressPercent = 45;
+              } else {
+                message = `🔍 Searching: ${query.text}`;
+                step = 'searching';
+                progressPercent = 25;
+              }
+            } else if (query.status === 'done') {
+              message = `✅ Found ${query.sourceCount || 0} sources for: ${query.text}`;
+              step = 'analyzing';
+              progressPercent = 65;
+            }
+            
+            setProgress({
+              step,
+              message,
+              progress: progressPercent,
+              searchCount: query.sourceCount
+            });
+          } else if (data.id === 'analyzing') {
+            setProgress({
+              step: 'analyzing',
+              message: '🔍 Analyzing sources...',
+              progress: 65
+            });
+          } else if (data.id === 'synthesizing') {
+            setProgress({
+              step: 'synthesizing',
+              message: '✍️ Writing comprehensive answer...',
+              progress: 90
+            });
+          } else if (data.replanningTriggered) {
+            setProgress({
+              step: 'searching',
+              message: '🔄 Expanding research scope...',
+              progress: 50
+            });
+          }
+        }
+      });
+
       return () => {
         socket.off('research:plan');
         socket.off('research:progress');
+        socket.off('timeline_event');
         socket.disconnect();
       };
     });

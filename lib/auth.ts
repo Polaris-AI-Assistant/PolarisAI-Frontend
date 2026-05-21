@@ -9,6 +9,7 @@ export interface User {
   lastSignIn?: string;
   first_name?: string;
   last_name?: string;
+  display_name?: string;
 }
 
 export interface AuthSession {

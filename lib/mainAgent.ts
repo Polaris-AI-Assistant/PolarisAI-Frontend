@@ -154,7 +154,8 @@ export async function processQueryStreaming(
   messageId?: string,  // Optional: for storing timeline events
   fileIds?: string[],  // Optional: for file context
   userMessageId?: string,  // Optional: user message ID for linking files
-  responseLanguage?: string  // Optional: for multi-language response support
+  responseLanguage?: string,  // Optional: for multi-language response support
+  abortSignal?: AbortSignal  // Optional: for cancelling the request
 ): Promise<void> {
   // Import auth functions dynamically to avoid circular dependencies
   const { getAuthToken, refreshAuthToken } = await import('./auth');
@@ -184,6 +185,7 @@ export async function processQueryStreaming(
         userMessageId,  // Pass userMessageId for linking files to user message
         responseLanguage,  // Pass responseLanguage for multi-language support
       }),
+      signal: abortSignal,  // Add abort signal support
     });
   };
 
@@ -260,6 +262,16 @@ export async function processQueryStreaming(
         // Ignore incomplete data at the end
       }
     }
+  } catch (error: any) {
+    // Handle abort gracefully
+    if (error.name === 'AbortError') {
+      // Re-throw with a cleaner name for better error handling upstream
+      const abortError = new Error('Stream aborted by user');
+      abortError.name = 'AbortError';
+      throw abortError;
+    }
+    // Re-throw other errors
+    throw error;
   } finally {
     reader.releaseLock();
   }
@@ -281,6 +293,8 @@ export interface StreamChunk {
     | 'timeline_confirmation_required' | 'timeline_confirmation_received' 
     // Completion
     | 'timeline_task_completed' | 'timeline_task_failed'
+    // Research
+    | 'timeline_research_step'
     // File generation
     | 'file_generated' | 'file_generation_error' | 'memory_stored';
   status?: 'start' | 'stop';
@@ -321,6 +335,34 @@ export interface StreamChunk {
   data?: any;
   summary?: string;
   needsClarification?: boolean;
+  // Research step fields
+  researchStep?: {
+    id: string;
+    status?: string;
+    planTitle?: string;
+    searchQuery?: {
+      id: string;
+      text: string;
+      rawText?: string;
+      status?: string;
+      addSource?: string;
+      sources?: string[];
+      sourceCount?: number;
+    };
+    searchQueries?: Array<{
+      id: string;
+      text: string;
+      rawText?: string;
+      status: string;
+      sources: string[];
+      sourceCount?: number;
+    }>;
+    replanningTriggered?: boolean;
+    replanningPoints?: number[];
+    totalSources?: number;
+    totalSearches?: number;
+    wordCount?: number;
+  };
   // File generation fields
   fileType?: 'pdf' | 'txt';
   filename?: string;

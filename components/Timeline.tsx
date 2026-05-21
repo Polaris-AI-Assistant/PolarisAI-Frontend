@@ -327,6 +327,15 @@ const TimelineStep: React.FC<TimelineStepProps> = ({ event, isExpanded, onToggle
         {/* Expanded details */}
         {isExpanded && hasDetails && (
           <div className="mt-2 ml-6 p-3 bg-neutral-800/50 rounded-lg text-xs font-mono">
+            {/* Show DeepResearchIndicator for research agent */}
+            {(event.agentKey === 'research' || event.agentKey === 'deep_research' || 
+              event.agentName === 'research' || event.agentName === 'deep_research' ||
+              event.agentName === 'Research') && researchPhases && researchPhases.length > 0 && (
+              <div className="mb-3 -mx-3 -mt-3 p-3 bg-neutral-900/50 rounded-t-lg">
+                <DeepResearchIndicator phases={researchPhases} />
+              </div>
+            )}
+            
             {event.query && (
               <div className="mb-2">
                 <span className="text-neutral-500">Query: </span>
@@ -352,22 +361,6 @@ const TimelineStep: React.FC<TimelineStepProps> = ({ event, isExpanded, onToggle
           </div>
         )}
 
-        {/* Show DeepResearchIndicator when this is the research agent step */}
-        {(() => {
-          const shouldShow = (event.type === 'timeline_agent_executing' || event.type === 'timeline_agent_completed') &&
-            (event.agentKey === 'research' || event.agentKey === 'deep_research') &&
-            researchPhases && researchPhases.length > 0;
-          
-          console.log('[Timeline] 🔍 DeepResearchIndicator check:', {
-            eventType: event.type,
-            agentKey: event.agentKey,
-            hasResearchPhases: !!researchPhases,
-            phasesLength: researchPhases?.length,
-            shouldShow
-          });
-          
-          return shouldShow ? <DeepResearchIndicator phases={researchPhases} /> : null;
-        })()}
       </div>
     </div>
   );

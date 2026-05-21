@@ -43,3 +43,38 @@ export function getSimilarityLabel(similarity: number): string {
     return 'Low Match';
   }
 }
+
+export function getDynamicGreeting(userName?: string): string {
+  const now = new Date();
+  const hours = now.getHours();
+  const dayOfWeek = now.getDay();
+  
+  let timeGreeting = '';
+  
+  // Time-based greeting
+  if (hours >= 5 && hours < 12) {
+    timeGreeting = 'Good morning';
+  } else if (hours >= 12 && hours < 17) {
+    timeGreeting = 'Good afternoon';
+  } else if (hours >= 17 && hours < 21) {
+    timeGreeting = 'Good evening';
+  } else {
+    timeGreeting = 'Good night';
+  }
+  
+  // Special greeting for weekends
+  const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+  
+  if (dayOfWeek === 0) { // Sunday
+    timeGreeting = `Happy ${dayName}`;
+  } else if (dayOfWeek === 6) { // Saturday
+    timeGreeting = `Happy ${dayName}`;
+  } else if (hours >= 8 && hours < 10) { // Morning rush hour
+    timeGreeting = 'Get ready to work';
+  }
+  
+  // Add username if available
+  const displayName = userName ? ` ${userName}` : '';
+  
+  return timeGreeting + displayName + ',';
+}
