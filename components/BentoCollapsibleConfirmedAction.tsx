@@ -2,9 +2,8 @@
 
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/600.css';
-import { useState, useEffect } from 'react';
-import Image from 'next/image';
-import { Check } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Shield, ChevronDown } from 'lucide-react';
 
 // Get the app logo based on agent name or action type
 const getAppLogo = (agentName?: string, actionType?: string): { src: string; alt: string } => {
@@ -106,7 +105,7 @@ const BentoEmailPreviewRenderer = ({ content }: { content: string }) => {
   return (
     <div className="space-y-0">
       {/* Subject */}
-      <div className="pt-1 pb-4 border-b border-white/[0.06]">
+      <div className="pt-1 pb-4 border-b border-white/6">
         <p className="text-white/40 text-xs mb-1.5">Subject</p>
         <p className="text-white font-medium text-[15px]">{subject || 'No subject'}</p>
       </div>
@@ -115,7 +114,7 @@ const BentoEmailPreviewRenderer = ({ content }: { content: string }) => {
       {bodyContent && (
         <div className="pt-4">
           <p className="text-white/40 text-xs mb-2">Email Content</p>
-          <div className="text-white/80 text-sm whitespace-pre-wrap leading-relaxed bg-white/[0.02] rounded-xl p-4 border border-white/[0.06]">
+          <div className="text-white/80 text-sm whitespace-pre-wrap leading-relaxed bg-white/2 rounded-xl p-4 border border-white/6">
             {bodyContent}
           </div>
         </div>
@@ -145,18 +144,7 @@ export const BentoCollapsibleConfirmedAction = ({
   autoToggle = false,
   autoToggleInterval = 4000
 }: BentoCollapsibleConfirmedActionProps) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  // Auto-toggle effect
-  useEffect(() => {
-    if (!autoToggle) return;
-
-    const timer = setInterval(() => {
-      setIsExpanded(prev => !prev);
-    }, autoToggleInterval);
-
-    return () => clearInterval(timer);
-  }, [autoToggle, autoToggleInterval]);
+  const isExpanded = false;
   
   // Get the app logo
   const appLogo = getAppLogo(agentName, actionType);
@@ -173,10 +161,11 @@ export const BentoCollapsibleConfirmedAction = ({
   })();
   
   const previewContent = content;
+  const isSendEmail = actionType === 'send_email';
   
   // Get action badge text
   const getActionBadge = () => {
-    if (actionType === 'send_email') return 'sendEmail';
+    if (isSendEmail) return 'Ready to send';
     if (actionType === 'create_event') return 'createEvent';
     if (actionType === 'create_document') return 'createDoc';
     if (actionType === 'create_form') return 'createForm';
@@ -188,73 +177,47 @@ export const BentoCollapsibleConfirmedAction = ({
     <div className="max-w-3xl w-full">
       {/* Collapsible Bar */}
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full rounded-xl bg-[#1a1a1a]/80 border border-white/[0.06] px-4 py-2.5 hover:bg-[#1f1f1f]/80 hover:border-white/[0.08] transition-all duration-300"
+        onClick={() => {}}
+        className="w-full rounded-xl bg-[#111111]/85 border border-white/6 px-3.5 py-3 hover:bg-[#141414]/85 hover:border-white/8 transition-all duration-300"
       >
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-2.5">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {/* App Logo */}
-            <div className="flex-shrink-0">
-              <Image 
-                src={appLogo.src} 
-                alt={appLogo.alt} 
-                width={22} 
-                height={22} 
+            <div className="shrink-0">
+              <img
+                src={appLogo.src}
+                alt={appLogo.alt}
+                width={22}
+                height={22}
                 className="object-contain"
               />
             </div>
             
             {/* Main info */}
             <div className="text-left flex-1 min-w-0">
-              <span className="text-sm font-medium text-white/90 truncate block">{description || 'Action Confirmed'}</span>
+              <span className="text-[13px] font-medium text-white/90 truncate block leading-tight">{description || 'Action Confirmed'}</span>
               {actionType === 'send_email' && displayRecipient && (
-                <span className="text-xs truncate block mt-0.5">
+                <span className="text-[11px] truncate block mt-0.5 leading-tight">
                   <span className="text-white/40">To:</span> <span className="font-bold text-emerald-400">{displayRecipient}</span>
                 </span>
               )}
             </div>
           </div>
           
-          <div className="flex items-center gap-2.5 flex-shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {/* Action badge */}
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/20">
-              <Check className="w-3 h-3 text-emerald-400" />
-              <span className="text-xs font-medium text-emerald-400">{getActionBadge()}</span>
+            <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border ${isSendEmail ? 'bg-[#0d2b2a]/80 border-emerald-500/25' : 'bg-emerald-500/15 border-emerald-500/20'}`}>
+              <Check className={`w-3 h-3 ${isSendEmail ? 'text-emerald-400' : 'text-emerald-400'}`} />
+              <span className={`text-xs font-medium ${isSendEmail ? 'text-emerald-400' : 'text-emerald-400'}`}>{getActionBadge()}</span>
             </div>
             
             {/* Dropdown arrow */}
-            <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="text-white/40">
-                <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+            <div className="transition-transform duration-300">
+              <ChevronDown className="w-4 h-4 text-white/40" />
             </div>
           </div>
         </div>
       </button>
-
-      {/* Expanded Content */}
-      {isExpanded && (
-        <div className="mt-1.5 rounded-xl bg-[#1a1a1a]/90 border border-white/[0.06] overflow-hidden">
-          <div className="p-5">
-            <div 
-              className="space-y-3"
-              style={{ 
-                fontFamily: 'Inter, "Inter Fallback"',
-                fontSize: '14px',
-                lineHeight: '22px',
-              }}
-            >
-              {actionType === 'send_email' ? (
-                <BentoEmailPreviewRenderer content={previewContent} />
-              ) : previewContent ? (
-                <span className="text-white/40">Preview content</span>
-              ) : (
-                <span className="text-white/40">No preview content available</span>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

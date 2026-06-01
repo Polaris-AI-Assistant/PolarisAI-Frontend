@@ -25,6 +25,30 @@ const getScrollbarStyles = (isDark: boolean) => `
   }
 `;
 
+type ResearchStatus = 'error' | 'done' | 'active' | 'idle';
+
+type ResearchPhaseId = ResearchPhase['id'];
+
+const normalizeResearchStatus = (status?: string): ResearchStatus | undefined => {
+  if (status === 'error' || status === 'done' || status === 'active' || status === 'idle') {
+    return status;
+  }
+
+  return undefined;
+};
+
+const normalizeResearchPhaseId = (id?: string): ResearchPhaseId | undefined => {
+  if (id === 'planning' || id === 'searching' || id === 'analyzing' || id === 'synthesizing') {
+    return id;
+  }
+
+  return undefined;
+};
+
+const normalizeSearchQueryStatus = (status?: string): 'active' | 'done' => {
+  return status === 'done' ? 'done' : 'active';
+};
+
 import { isAuthenticated, getStoredUser } from '../lib/auth';
 import {
   processQueryStreaming,
@@ -2523,47 +2547,49 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                   
                   // Handle search query updates
                   if (step.searchQuery) {
-                    console.log('[MainAgent] 🔍 Processing search query:', step.searchQuery);
+                    const searchQuery = step.searchQuery;
+                    console.log('[MainAgent] 🔍 Processing search query:', searchQuery);
                     const searchQueries = existingPhase.searchQueries || [];
-                    const queryIndex = searchQueries.findIndex(q => q.id === step.searchQuery.id);
+                    const queryIndex = searchQueries.findIndex(q => q.id === searchQuery.id);
                     
                     if (queryIndex >= 0) {
                       // Update existing query
                       const existingQuery = searchQueries[queryIndex];
                       
                       // Handle adding a source
-                      if (step.searchQuery.addSource) {
-                        console.log('[MainAgent] ➕ Adding source:', step.searchQuery.addSource);
+                      if (searchQuery.addSource) {
+                        console.log('[MainAgent] ➕ Adding source:', searchQuery.addSource);
                         searchQueries[queryIndex] = {
                           ...existingQuery,
-                          sources: [...existingQuery.sources, step.searchQuery.addSource],
+                          sources: [...existingQuery.sources, searchQuery.addSource],
                         };
                       } else {
                         // Update query status and other fields
                         console.log('[MainAgent] 🔄 Updating query status');
                         searchQueries[queryIndex] = {
                           ...existingQuery,
-                          ...step.searchQuery,
+                          ...searchQuery,
+                          status: searchQuery.status === 'done' ? 'done' : 'active',
                           sources: existingQuery.sources, // Preserve sources
                         };
                       }
                     } else {
                       // Add new query
-                      console.log('[MainAgent] ➕ Adding new query:', step.searchQuery.id);
+                      console.log('[MainAgent] ➕ Adding new query:', searchQuery.id);
                       searchQueries.push({
-                        id: step.searchQuery.id,
-                        text: step.searchQuery.text,
-                        rawText: step.searchQuery.rawText,
-                        status: step.searchQuery.status || 'active',
-                        sources: step.searchQuery.addSource ? [step.searchQuery.addSource] : [],
-                        sourceCount: step.searchQuery.sourceCount,
+                        id: searchQuery.id,
+                        text: searchQuery.text,
+                        rawText: searchQuery.rawText,
+                        status: searchQuery.status === 'done' ? 'done' : 'active',
+                        sources: searchQuery.addSource ? [searchQuery.addSource] : [],
+                        sourceCount: searchQuery.sourceCount,
                       });
                     }
                     
                     updated[phaseIndex] = {
                       ...existingPhase,
                       searchQueries,
-                      status: step.status || existingPhase.status,
+                      status: normalizeResearchStatus(step.status) ?? existingPhase.status,
                     };
                   } else if (step.replanningTriggered) {
                     // Mark replanning point
@@ -2572,15 +2598,18 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                     updated[phaseIndex] = {
                       ...existingPhase,
                       replanningPoints: [...(existingPhase.replanningPoints || []), currentQueryCount - 1],
-                      status: step.status || existingPhase.status,
+                      status: normalizeResearchStatus(step.status) ?? existingPhase.status,
                     };
                   } else {
                     // General phase update
                     console.log('[MainAgent] 🔄 General phase update');
                     updated[phaseIndex] = {
                       ...existingPhase,
-                      ...step,
-                      status: step.status || existingPhase.status,
+                      status: normalizeResearchStatus(step.status) ?? existingPhase.status,
+                      planTitle: step.planTitle ?? existingPhase.planTitle,
+                      totalSources: step.totalSources ?? existingPhase.totalSources,
+                      totalSearches: step.totalSearches ?? existingPhase.totalSearches,
+                      wordCount: step.wordCount ?? existingPhase.wordCount,
                       searchQueries: existingPhase.searchQueries, // Preserve queries
                       replanningPoints: existingPhase.replanningPoints, // Preserve replanning points
                     };
@@ -2589,14 +2618,14 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                   // Add new phase
                   console.log('[MainAgent] ➕ Adding new phase:', step.id);
                   updated.push({
-                    id: step.id,
-                    status: step.status || 'idle',
+                    id: normalizeResearchPhaseId(step.id) ?? 'planning',
+                    status: normalizeResearchStatus(step.status) ?? 'idle',
                     planTitle: step.planTitle,
                     searchQueries: step.searchQuery ? [{
                       id: step.searchQuery.id,
                       text: step.searchQuery.text,
                       rawText: step.searchQuery.rawText,
-                      status: step.searchQuery.status || 'active',
+                      status: normalizeSearchQueryStatus(step.searchQuery.status),
                       sources: step.searchQuery.addSource ? [step.searchQuery.addSource] : [],
                       sourceCount: step.searchQuery.sourceCount,
                     }] : [],
@@ -3231,43 +3260,45 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                   
                   // Handle search query updates
                   if (step.searchQuery) {
+                    const searchQuery = step.searchQuery;
                     const searchQueries = existingPhase.searchQueries || [];
-                    const queryIndex = searchQueries.findIndex(q => q.id === step.searchQuery.id);
+                    const queryIndex = searchQueries.findIndex(q => q.id === searchQuery.id);
                     
                     if (queryIndex >= 0) {
                       // Update existing query
                       const existingQuery = searchQueries[queryIndex];
                       
                       // Handle adding a source
-                      if (step.searchQuery.addSource) {
+                      if (searchQuery.addSource) {
                         searchQueries[queryIndex] = {
                           ...existingQuery,
-                          sources: [...existingQuery.sources, step.searchQuery.addSource],
+                          sources: [...existingQuery.sources, searchQuery.addSource],
                         };
                       } else {
                         // Update query status and other fields
                         searchQueries[queryIndex] = {
                           ...existingQuery,
-                          ...step.searchQuery,
+                          ...searchQuery,
+                          status: searchQuery.status === 'done' ? 'done' : 'active',
                           sources: existingQuery.sources, // Preserve sources
                         };
                       }
                     } else {
                       // Add new query
                       searchQueries.push({
-                        id: step.searchQuery.id,
-                        text: step.searchQuery.text,
-                        rawText: step.searchQuery.rawText,
-                        status: step.searchQuery.status || 'active',
-                        sources: step.searchQuery.addSource ? [step.searchQuery.addSource] : [],
-                        sourceCount: step.searchQuery.sourceCount,
+                        id: searchQuery.id,
+                        text: searchQuery.text,
+                        rawText: searchQuery.rawText,
+                        status: searchQuery.status === 'done' ? 'done' : 'active',
+                        sources: searchQuery.addSource ? [searchQuery.addSource] : [],
+                        sourceCount: searchQuery.sourceCount,
                       });
                     }
                     
                     updated[phaseIndex] = {
                       ...existingPhase,
                       searchQueries,
-                      status: step.status || existingPhase.status,
+                      status: normalizeResearchStatus(step.status) ?? existingPhase.status,
                     };
                   } else if (step.replanningTriggered) {
                     // Mark replanning point
@@ -3275,14 +3306,17 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                     updated[phaseIndex] = {
                       ...existingPhase,
                       replanningPoints: [...(existingPhase.replanningPoints || []), currentQueryCount - 1],
-                      status: step.status || existingPhase.status,
+                      status: normalizeResearchStatus(step.status) ?? existingPhase.status,
                     };
                   } else {
                     // General phase update
                     updated[phaseIndex] = {
                       ...existingPhase,
-                      ...step,
-                      status: step.status || existingPhase.status,
+                      status: normalizeResearchStatus(step.status) ?? existingPhase.status,
+                      planTitle: step.planTitle ?? existingPhase.planTitle,
+                      totalSources: step.totalSources ?? existingPhase.totalSources,
+                      totalSearches: step.totalSearches ?? existingPhase.totalSearches,
+                      wordCount: step.wordCount ?? existingPhase.wordCount,
                       searchQueries: existingPhase.searchQueries, // Preserve queries
                       replanningPoints: existingPhase.replanningPoints, // Preserve replanning points
                     };
@@ -3290,14 +3324,14 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
                 } else {
                   // Add new phase
                   updated.push({
-                    id: step.id,
-                    status: step.status || 'idle',
+                    id: normalizeResearchPhaseId(step.id) ?? 'planning',
+                    status: normalizeResearchStatus(step.status) ?? 'idle',
                     planTitle: step.planTitle,
                     searchQueries: step.searchQuery ? [{
                       id: step.searchQuery.id,
                       text: step.searchQuery.text,
                       rawText: step.searchQuery.rawText,
-                      status: step.searchQuery.status || 'active',
+                      status: normalizeSearchQueryStatus(step.searchQuery.status),
                       sources: step.searchQuery.addSource ? [step.searchQuery.addSource] : [],
                       sourceCount: step.searchQuery.sourceCount,
                     }] : [],

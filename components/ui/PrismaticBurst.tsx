@@ -95,13 +95,22 @@ export default function DarkVeil({
 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    const canvas = ref.current as HTMLCanvasElement;
-    const parent = canvas.parentElement as HTMLElement;
+    const canvas = ref.current;
+    const parent = canvas?.parentElement;
 
-    const renderer = new Renderer({
-      dpr: Math.min(window.devicePixelRatio, 2),
-      canvas
-    });
+    if (!canvas || !parent || typeof window === 'undefined') {
+      return;
+    }
+
+    let renderer: Renderer | null = null;
+    try {
+      renderer = new Renderer({
+        dpr: Math.min(window.devicePixelRatio, 2),
+        canvas
+      });
+    } catch {
+      return;
+    }
 
     const gl = renderer.gl;
     const geometry = new Triangle(gl);
@@ -123,6 +132,7 @@ export default function DarkVeil({
     const mesh = new Mesh(gl, { geometry, program });
 
     const resize = () => {
+      if (!renderer) return;
       const w = parent.clientWidth,
         h = parent.clientHeight;
       renderer.setSize(w * resolutionScale, h * resolutionScale);
@@ -136,6 +146,7 @@ export default function DarkVeil({
     let frame = 0;
 
     const loop = () => {
+      if (!renderer) return;
       program.uniforms.uTime.value = ((performance.now() - start) / 1000) * speed;
       program.uniforms.uHueShift.value = hueShift;
       program.uniforms.uNoise.value = noiseIntensity;

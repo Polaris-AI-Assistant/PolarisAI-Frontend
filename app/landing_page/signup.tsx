@@ -1,7 +1,7 @@
-'use client'
+ 'use client'
 import React, { useState } from 'react';
 import SignUpIllustration from './signup_illustration';
-import TocDialog from '@/components/terms-conditions';
+import Link from 'next/link';
 
 // --- ICON COMPONENTS ---
 
@@ -529,8 +529,8 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({
           />
           <span className="text-gray-300 group-hover:text-white transition-colors flex-1">
             I agree to the{' '}
-            <span className="inline-block" onClick={(e) => e.preventDefault()}>
-              <TocDialog />
+            <span className="inline-block">
+              <Link href="/terms" className="text-white underline hover:text-gray-300">Terms & Conditions</Link>
             </span>
           </span>
         </label>

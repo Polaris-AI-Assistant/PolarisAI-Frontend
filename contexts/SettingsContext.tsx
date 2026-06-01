@@ -7,6 +7,7 @@ export type SettingsTab = 'general' | 'memory' | 'notifications' | 'account';
 interface SettingsContextType {
   isOpen: boolean;
   activeTab: SettingsTab;
+  themeMode: 'light' | 'dark';
   openSettings: (tab?: SettingsTab) => void;
   closeSettings: () => void;
   setActiveTab: (tab: SettingsTab) => void;
@@ -17,6 +18,7 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [themeMode] = useState<'light' | 'dark'>('dark');
 
   const openSettings = (tab: SettingsTab = 'general') => {
     setActiveTab(tab);
@@ -32,6 +34,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       value={{
         isOpen,
         activeTab,
+        themeMode,
         openSettings,
         closeSettings,
         setActiveTab,

@@ -13,15 +13,64 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Globe } from "@/components/ui/cobe-globe";
 import ScrambleHover from "@/components/ui/scramble";
-import { Mail, Check, X, AlertCircle } from "lucide-react";
+import { Mail, Check, X, Send, MessageSquare, Globe as LucideGlobe, Sparkles, Calendar } from "lucide-react";
 import { PreviewContentRenderer, CollapsibleConfirmedAction } from "@/components/MainAgentContent";
 import { BentoCollapsibleConfirmedAction } from "@/components/BentoCollapsibleConfirmedAction";
 import { BentoExecutionTimeline } from "@/components/BentoExecutionTimeline";
 
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] });
+
+const BENTO_CARD_CLASS = "border border-cyan-400/10 bg-[#05070c]/92 backdrop-blur-xl shadow-[0_18px_40px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.04)]";
+const BENTO_BADGE_STYLE = {
+  background: "rgba(10, 18, 32, 0.9)",
+  border: "1px solid rgba(34, 211, 238, 0.18)",
+};
+
+function SafetyShieldIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path
+        d="M9 1.75L14.5 3.75V8.15C14.5 11.7 12.37 14.45 9 16.25C5.63 14.45 3.5 11.7 3.5 8.15V3.75L9 1.75Z"
+        stroke="#f4b41a"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 5.15L9.85 7.05L11.95 7.25L10.38 8.6L10.85 10.65L9 9.6L7.15 10.65L7.62 8.6L6.05 7.25L8.15 7.05L9 5.15Z"
+        fill="#f4b41a"
+      />
+    </svg>
+  );
+}
+
+function RealtimeBadgeIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <path d="M7.1 0.75L2.3 6.4H5.7L4.9 11.25L9.7 5.6H6.3L7.1 0.75Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function SequenceIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M2.2 4.2H11.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M3.4 7H10.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+      <path d="M4.6 9.8H9.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.6" />
+    </svg>
+  );
+}
+
+function AutomationIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M7 1.6L7.9 4.1L10.4 5L7.9 5.9L7 8.4L6.1 5.9L3.6 5L6.1 4.1L7 1.6Z" fill="currentColor" />
+      <path d="M10.9 7.6L11.4 9L12.8 9.5L11.4 10L10.9 11.4L10.4 10L9 9.5L10.4 9L10.9 7.6Z" fill="currentColor" opacity="0.8" />
+    </svg>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BentoGridShowcase (layout engine — untouched from original)
@@ -64,7 +113,7 @@ export const BentoGridShowcase = ({
     initial="hidden"
     animate="visible"
     className={cn(
-      "grid w-full grid-cols-1 gap-4 md:grid-cols-3 md:grid-rows-[320px_530px]",
+      "grid w-full grid-cols-1 gap-3 md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.04fr)_minmax(0,1.04fr)] md:gap-x-4 md:grid-rows-[316px_390px]",
       className
     )}
   >
@@ -129,8 +178,10 @@ function AgentGraph() {
 
       // Subtle background glow behind center
       const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.55);
-      grd.addColorStop(0, "rgba(59,130,246,0.07)");
-      grd.addColorStop(1, "rgba(59,130,246,0)");
+      grd.addColorStop(0, "rgba(59,130,246,0.10)");
+      grd.addColorStop(0.45, "rgba(45,212,191,0.08)");
+      grd.addColorStop(0.78, "rgba(244,114,182,0.05)");
+      grd.addColorStop(1, "rgba(250,128,114,0)");
       ctx.beginPath();
       ctx.arc(cx, cy, R * 0.55, 0, Math.PI * 2);
       ctx.fillStyle = grd;
@@ -141,7 +192,7 @@ function AgentGraph() {
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.lineTo(n.x, n.y);
-        ctx.strokeStyle = "rgba(59,130,246,0.10)";
+        ctx.strokeStyle = "rgba(45,212,191,0.12)";
         ctx.lineWidth = 1;
         ctx.stroke();
       });
@@ -160,8 +211,8 @@ function AgentGraph() {
 
         // Tiny glow around the dot
         const gd = ctx.createRadialGradient(px, py, 0, px, py, 7);
-        gd.addColorStop(0, `rgba(59,130,246,${0.18 * alpha})`);
-        gd.addColorStop(1, "rgba(59,130,246,0)");
+        gd.addColorStop(0, `rgba(244,114,182,${0.16 * alpha})`);
+        gd.addColorStop(1, "rgba(244,114,182,0)");
         ctx.beginPath();
         ctx.arc(px, py, 7, 0, Math.PI * 2);
         ctx.fillStyle = gd;
@@ -173,7 +224,7 @@ function AgentGraph() {
         const pulse = ((t * 0.45 + k * 0.33) % 1);
         ctx.beginPath();
         ctx.arc(cx, cy, 26 + pulse * 40, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(59,130,246,${0.12 * (1 - pulse)})`;
+        ctx.strokeStyle = `rgba(244,114,182,${0.12 * (1 - pulse)})`;
         ctx.lineWidth = 1;
         ctx.stroke();
       }
@@ -185,7 +236,7 @@ function AgentGraph() {
         ctx.arc(n.x, n.y, 24, 0, Math.PI * 2);
         ctx.fillStyle = "rgba(15,20,30,0.95)";
         ctx.fill();
-        ctx.strokeStyle = "rgba(59,130,246,0.22)";
+        ctx.strokeStyle = "rgba(45,212,191,0.22)";
         ctx.lineWidth = 1;
         ctx.stroke();
 
@@ -202,7 +253,7 @@ function AgentGraph() {
       ctx.arc(cx, cy, 30, 0, Math.PI * 2);
       ctx.fillStyle = "#1d4ed8";
       ctx.fill();
-      ctx.strokeStyle = "rgba(96,165,250,0.5)";
+      ctx.strokeStyle = "rgba(45,212,191,0.55)";
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
@@ -233,18 +284,21 @@ function AgentGraph() {
 
 function IntegrationCard() {
   return (
-    <Card className="flex h-full flex-col overflow-hidden backdrop-blur-md border-[rgba(255,255,255,0.08)]" style={{ background: "rgba(10,12,20,0.6)" }}>
-      <CardHeader className="pb-3 shrink-0">
-        <div className="flex items-center gap-2 mb-1">
-          <Badge className="bg-blue-950 text-blue-400 border-blue-800 text-[10px] font-mono tracking-widest hover:bg-blue-950">
-            MULTI-AGENT
-          </Badge>
+    <Card className={`flex h-full flex-col overflow-hidden ${BENTO_CARD_CLASS}`} style={{ background: "#05070c" }}>
+      <CardHeader className="pt-7 pb-3 shrink-0">
+        <div className="flex items-center gap-2 mb-3">
+          <MessageSquare className="w-4 h-4 text-cyan-300" />
+          <span className="text-[12px] font-semibold tracking-[0.16em] text-cyan-300">
+            NATURAL LANGUAGE
+          </span>
         </div>
-        <CardTitle className={`${spaceGrotesk.className} text-xl md:text-2xl font-bold text-white leading-snug`}>
-          13 specialized agents.<br />One conversation.
+        <CardTitle className={`${spaceGrotesk.className} text-xl md:text-3xl font-bold text-white leading-snug`}>
+          Talk naturally. In any language.
         </CardTitle>
-        <CardDescription className="text-gray-300 leading-relaxed">
-          Routes your intent to the right agent — or many at once — executing in parallel without switching a single tab.
+        <CardDescription className="mt-4 text-gray-300 leading-relaxed">
+          
+          <p>No commands. No syntax.</p>
+          <p>Just natural conversations that turn into actions.</p>
         </CardDescription>
       </CardHeader>
 
@@ -253,7 +307,7 @@ function IntegrationCard() {
         {/* Absolute positioned container for globe and scramble - centered at bottom */}
         <div
           className="absolute left-1/2 -translate-x-1/2 bottom-0 shrink-0 overflow-visible"
-          style={{ width: "480px", height: "480px", zIndex: 50, pointerEvents: "none" }}
+          style={{ width: "390px", height: "390px", zIndex: 50, pointerEvents: "none", bottom: "40px" }}
         >
           <div className="w-full h-full" style={{ position: "relative" }}>
             {/* 1. Scramble / Hello box — LOWER z-index so globe sits above it */}
@@ -264,10 +318,10 @@ function IntegrationCard() {
               <Globe
                 markers={[]}
                 arcs={[]}
-                markerColor={[0.3, 0.45, 0.85]}
-                baseColor={[0.2, 0.2, 0.2]}
-                arcColor={[0.3, 0.45, 0.85]}
-                glowColor={[0.94, 0.93, 0.91]}
+                markerColor={[0.29, 0.87, 0.5]}
+                baseColor={[0.17, 0.36, 0.74]}
+                arcColor={[0.96, 0.47, 0.4]}
+                glowColor={[0.13, 0.83, 0.93]}
                 dark={1}
               />
             </div>
@@ -276,19 +330,23 @@ function IntegrationCard() {
       </CardContent>
 
       {/* Tag strip */}
-      <div className="px-5 pb-5 pt-2 shrink-0 flex gap-2">
-          {["Parallel", "Sequential", "Automated"].map((tag) => (
-          <span
-            key={tag}
-            className="text-xs px-2.5 py-1 rounded-full font-medium text-blue-400"
-            style={{
-              background: "rgba(59,130,246,0.08)",
-              border: "1px solid rgba(59,130,246,0.18)",
-            }}
-          >
-            {tag}
-          </span>
-        ))}
+      <div className="px-5 pb-5 pt-2 shrink-0 flex justify-center">
+        <div className="inline-flex items-center justify-center gap-5 text-[15px] font-semibold text-sky-200/95 md:text-[16px]">
+          <div className="inline-flex items-center gap-2 whitespace-nowrap">
+            <MessageSquare className="h-4.5 w-4.5 text-cyan-300" />
+            <span>Natural</span>
+          </div>
+          <span className="h-4 w-px bg-white/10" />
+          <div className="inline-flex items-center gap-2 whitespace-nowrap">
+            <LucideGlobe className="h-4.5 w-4.5 text-sky-300" />
+            <span>Multilingual</span>
+          </div>
+          <span className="h-4 w-px bg-white/10" />
+          <div className="inline-flex items-center gap-2 whitespace-nowrap">
+            <Sparkles className="h-4.5 w-4.5 text-emerald-300" />
+            <span>Actionable</span>
+          </div>
+        </div>
       </div>
     </Card>
   );
@@ -301,79 +359,22 @@ function IntegrationCard() {
 
 function TrackersCard() {
   return (
-    <Card className="h-full flex flex-col backdrop-blur-md border-[rgba(255,255,255,0.08)] overflow-hidden" style={{ background: "rgba(10,12,20,0.6)" }}>
-      <CardContent className="flex-1 flex flex-col justify-between p-5 min-h-0 gap-4">
-        {/* Top row: headline + description */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <span
-                className="inline-block text-[10px] font-mono tracking-widest px-2.5 py-1 rounded-full mb-2"
-                style={{
-                  background: "rgba(59,130,246,0.08)",
-                  border: "1px solid rgba(59,130,246,0.2)",
-                  color: "#60a5fa",
-                }}
-              >
-                INTEGRATIONS
-              </span>
-              <h3 className={`${spaceGrotesk.className} text-xl font-bold text-white leading-snug`}>
-                Every tool you already use.<br />Now unified.
-              </h3>
-              <p className="text-gray-300 mt-1">
-                Google Workspace · Microsoft 365 · GitHub · Search · Maps · Weather · Flights
-              </p>
-            </div>
-          </div>
+    <Card className={`h-full flex flex-col overflow-hidden ${BENTO_CARD_CLASS}`} style={{ background: "#05070c" }}>
+      <CardHeader className="pb-4 pt-5 shrink-0">
+        <div className="flex items-center gap-2 mb-4">
+          <Send className="w-5 h-5 text-sky-400" />
+          <span className="text-[12px] font-semibold tracking-[0.16em] text-sky-400">CONTROL</span>
         </div>
+        <CardTitle className={`${spaceGrotesk.className} text-[28px] font-semibold text-white leading-[1.12] tracking-[-0.03em]`}>
+          Powerful, but never reckless.
+        </CardTitle>
+        <CardDescription className="text-[16px] text-white/65 mt-3">
+          Preview every sensitive action before it executes.
+        </CardDescription>
+      </CardHeader>
 
-        {/* Integration scroll strip */}
-        <div className="relative overflow-hidden h-16" style={{ width: "100%", maskImage: "linear-gradient(to right, transparent, black 8%, black 92%, transparent)" }}>
-          <motion.div
-            className="flex gap-4 w-max items-center"
-            animate={{ x: [0, -50 * INTEGRATIONS.length] }}
-            transition={{
-              duration: 28,
-              ease: "linear",
-              repeat: Infinity,
-            }}
-          >
-            {[...INTEGRATIONS, ...INTEGRATIONS, ...INTEGRATIONS].map((item, i) => (
-              <Image
-                key={`${item.name}-${i}`}
-                src={item.logo}
-                alt={item.name}
-                width={40}
-                height={40}
-                className="object-contain shrink-0"
-              />
-            ))}
-          </motion.div>
-        </div>
-
-        {/* Bottom stat row */}
-        <div className="flex items-center gap-6">
-          {[
-            { value: "13", label: "integrations" },
-            { value: "50+", label: "languages"    },
-            { value: "13",  label: "agents"       },
-          ].map((s) => (
-            <div key={s.label} className="flex items-baseline gap-1.5">
-              <span className="text-[20px] font-bold text-white leading-none">{s.value}</span>
-              <span className="text-[11px] text-gray-400 font-mono">{s.label}</span>
-            </div>
-          ))}
-          <span
-            className="ml-auto text-[10px] font-mono px-2.5 py-1 rounded-full"
-            style={{
-              background: "rgba(59,130,246,0.07)",
-              border: "1px solid rgba(59,130,246,0.18)",
-              color: "#3b82f6",
-            }}
-          >
-            growing →
-          </span>
-        </div>
+      <CardContent className="flex-1 px-4 pb-4 pt-3 min-h-0 overflow-hidden">
+        <EmailPreview />
       </CardContent>
     </Card>
   );
@@ -388,25 +389,36 @@ function StatisticCard() {
   const [showTimeline, setShowTimeline] = useState(true);
 
   return (
-    <Card className="h-full flex flex-col backdrop-blur-md border-[rgba(255,255,255,0.08)] overflow-hidden" style={{ background: "rgba(10,12,20,0.6)" }}>
+    <Card className={`h-full flex flex-col overflow-hidden ${BENTO_CARD_CLASS}`} style={{ background: "#05070c" }}>
       <CardHeader className="pb-3 shrink-0">
-        <Badge className="w-fit text-blue-400 border-blue-900 text-[10px] font-mono tracking-widest mb-2" style={{ background: "rgba(30,58,138,0.4)" }}>
-          REAL-TIME EXECUTION
-        </Badge>
-        <CardTitle className={`${spaceGrotesk.className} text-lg font-bold text-white leading-snug`}>
-          Thinking Approach
+        <div className="mb-2 inline-flex items-center gap-2">
+          <span className=" text-cyan-300">
+            <RealtimeBadgeIcon />
+          </span>
+          <span className="text-[12px] font-semibold tracking-[0.16em] text-cyan-300">
+            REAL-TIME EXECUTION
+          </span>
+        </div>
+        <CardTitle className={`${spaceGrotesk.className} text-[27px] md:text-[28px] font-semibold text-white leading-[1.08] tracking-[-0.04em]`}>
+          Watch every step unfold.
         </CardTitle>
-        <CardDescription className="text-gray-300">
-          See how Polaris processes your intent step-by-step
+        <CardDescription className="mt-3 text-[16px] text-white/65 leading-relaxed">
+          See how Polaris processes your intent step-by-step.
         </CardDescription>
       </CardHeader>
 
       {/* Execution Timeline Container */}
-      <CardContent className="flex-1 px-4 pb-4 min-h-0 overflow-hidden">
-        <div className="h-full overflow-y-auto">
+      <CardContent className="flex-1 px-4 pb-4 min-h-0 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden">
           <BentoExecutionTimeline
             className="w-full"
           />
+        </div>
+        <div className="pt-3 shrink-0">
+          <div className="inline-flex items-center gap-2 text-[13px] font-medium text-cyan-300">
+            <span>View execution logs</span>
+            <span className="text-[16px] leading-none">›</span>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -417,91 +429,79 @@ function StatisticCard() {
 // SLOT 4 — Smart Scheduling (middle-middle)
 // Calendar event list + file chips (combined)
 // ─────────────────────────────────────────────────────────────────────────────
-const SCHEDULE_EVENTS = [
-  { time: "MON  10:00", label: "Team Standup",      recur: true  },
-  { time: "WED  14:30", label: "1:1 with Sarah",    recur: false },
-  { time: "FRI  17:00", label: "Weekly Report",     recur: true  },
+const SCHEDULE_ITEMS = [
+  {
+    logo: "/gmail.png",
+    label: "Send project update",
+    badge: "Daily",
+    time: "9:00 AM",
+  },
+  {
+    logo: "/Microsoft_Office_Teams_(2025–present).svg.png",
+    label: "Team standup reminder",
+    badge: "Weekdays",
+    time: "10:00 AM",
+  },
+  {
+    logo: "/Google_Calendar_icon_(2020).svg.png",
+    label: "1:1 with Sarah",
+    badge: "Wednesdays",
+    time: "2:30 PM",
+  },
+  // {
+  //   logo: "/git3.png",
+  //   label: "Weekly GitHub review",
+  //   badge: "Fridays",
+  //   time: "5:00 PM",
+  // },
 ];
 
 function FocusCard() {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 3500);
-    return () => clearInterval(id);
-  }, []);
-
-  // Cycle a "Reminder sent ✓" badge on the first recurring event
-  const showBadge = tick % 2 === 0;
-
   return (
-    <Card className="h-full flex flex-col backdrop-blur-md border-[rgba(255,255,255,0.08)] overflow-hidden" style={{ background: "rgba(10,12,20,0.6)" }}>
-      <CardHeader className="pb-2 shrink-0">
-        <Badge className="w-fit text-indigo-400 border-indigo-900 text-[10px] font-mono tracking-widest mb-1" style={{ background: "rgba(55,48,163,0.4)" }}>
-          SCHEDULING
-        </Badge>
-        <CardTitle className={`${spaceGrotesk.className} text-lg font-bold text-white leading-snug`}>
+    <Card className={`h-full flex flex-col overflow-hidden ${BENTO_CARD_CLASS}`} style={{ background: "#05070c" }}>
+      <CardHeader className="pt-5 pb-4 shrink-0">
+        <div className="flex items-center gap-2 mb-3">
+          <Calendar className="w-6 h-6 text-blue-400" />
+          <span className="text-[12px] font-semibold tracking-[0.16em] text-blue-400">SCHEDULING</span>
+        </div>
+        <CardTitle className={`${spaceGrotesk.className} text-[28px] font-semibold text-white leading-[1.12] tracking-[-0.03em]`}>
           Set it. Forget it.
         </CardTitle>
-        <CardDescription className="text-gray-300">
+        <CardDescription className="text-[16px] text-white/65 mt-3">
           Cron-based, timezone-aware. One-time or recurring — handled automatically.
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="flex-1 flex flex-col gap-2 px-5 pb-4 min-h-0 overflow-hidden">
-        {SCHEDULE_EVENTS.map((ev, i) => (
+      <CardContent className="flex-1 flex flex-col gap-2 px-4 pb-4 pt-1 min-h-0 overflow-hidden">
+        {SCHEDULE_ITEMS.map((item) => (
           <div
-            key={ev.label}
-            className="flex items-center justify-between px-3 py-2 rounded-lg"
+            key={item.label}
+            className="flex items-center justify-between gap-3 rounded-xl border border-white/6 bg-white/2 px-4 py-2.5"
             style={{
-              background: "rgba(255,255,255,0.025)",
-              border: "1px solid rgba(255,255,255,0.06)",
+              minHeight: 46,
             }}
           >
-            <div className="flex items-center gap-2.5">
-              <span
-                className="text-xs font-medium text-blue-400"
-                style={{
-                  background: "rgba(59,130,246,0.1)",
-                  color: "#60a5fa",
-                  border: "1px solid rgba(59,130,246,0.15)",
-                  letterSpacing: "0.04em",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "0.25rem",
-                  display: "inline-block",
-                }}
-              >
-                {ev.time}
-              </span>
-              <span className="text-sm text-gray-200">{ev.label}</span>
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div className="flex h-7 w-7 items-center justify-center shrink-0">
+                <Image src={item.logo} alt={item.label} width={20} height={20} className="object-contain" />
+              </div>
+              <span className="text-[13px] font-medium text-white/90 truncate">{item.label}</span>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0 ml-2">
-              {ev.recur && (
-              <span className="text-xs text-gray-400" title="Recurring">↻</span>
-              )}
-              {i === 0 && (
-                <AnimatePresence mode="wait">
-                  {showBadge && (
-                    <motion.span
-                      key="badge"
-                      initial={{ opacity: 0, scale: 0.85 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.85 }}
-                      transition={{ duration: 0.3 }}
-                      className="text-[9px] font-mono px-1.5 py-0.5 rounded"
-                      style={{
-                        background: "rgba(16,185,129,0.1)",
-                        color: "#34d399",
-                        border: "1px solid rgba(16,185,129,0.2)",
-                      }}
-                    >
-                      Sent ✓
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              )}
+            <div className="flex items-center gap-2.5 shrink-0">
+              <span className="rounded-md border border-white/8 bg-white/3 px-2.5 py-0.5 text-[11px] text-white/55">
+                {item.badge}
+              </span>
+              <span className="min-w-17.5 text-right text-[13px] text-white/70">{item.time}</span>
+              <span className="h-2 w-2 rounded-full bg-[#19d9d2]" />
             </div>
           </div>
         ))}
+        <div className="pt-1">
+          <span className="inline-flex items-center gap-2 text-[12px] font-medium text-blue-400">
+            View all schedules
+            <span className="text-[16px] leading-none">→</span>
+          </span>
+        </div>
       </CardContent>
     </Card>
   );
@@ -522,21 +522,21 @@ function BentoConfirmationBar({
   isConfirming = false,
 }: BentoConfirmationBarProps) {
   return (
-    <div className="rounded-xl bg-[#141414]/90 border border-white/6 px-5 py-3.5 flex items-center justify-between shrink-0">
-      <div className="flex items-center gap-3">
-        <div className="w-6 h-6 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-          <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+    <div className="rounded-xl bg-[#0b0f16]/92 border border-cyan-400/10 px-5 py-3.5 flex items-center justify-between gap-4 shrink-0">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-6 h-6 rounded-full bg-[#17120b] border border-[#f4b41a]/25 flex items-center justify-center shrink-0">
+          <SafetyShieldIcon />
         </div>
-        <div>
-          <p className="text-sm font-medium text-white/90">Ready to send</p>
-          <p className="text-xs text-white/40">Confirm to proceed</p>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-white/90 truncate">Safe by design</p>
+          <p className="text-xs text-white/40 truncate">You’re always in control.</p>
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={onSkip}
           disabled={isConfirming}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#252525] hover:bg-[#303030] border border-white/6 disabled:opacity-50 disabled:cursor-not-allowed text-white/70 text-sm font-medium transition-all duration-200"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#111720] hover:bg-[#16202c] border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed text-white/70 text-sm font-medium transition-all duration-200"
         >
           <X className="w-3.5 h-3.5" />
           Skip
@@ -544,7 +544,7 @@ function BentoConfirmationBar({
         <button
           onClick={onConfirm}
           disabled={isConfirming}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-all duration-200"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-linear-to-r from-blue-500 to-cyan-400 hover:from-blue-400 hover:to-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-all duration-200"
         >
           <Check className="w-3.5 h-3.5" />
           {isConfirming ? 'Processing...' : 'Send'}
@@ -580,9 +580,9 @@ Thank you for the productive discussion today. Looking forward to connecting nex
 Best regards`;
 
   return (
-    <div className="w-full h-full flex flex-col gap-0 min-h-0" style={{ overflow: "hidden" }}>
-      {/* Collapsible preview — grows/shrinks with content, no forced flex expansion */}
-      <div className="min-h-0 overflow-y-auto">
+    <div className="w-full h-full flex flex-col justify-between gap-3 min-h-0" style={{ overflow: "hidden" }}>
+      {/* Collapsible preview stays fully visible inside the card */}
+      <div className="shrink-0 min-h-0">
         <BentoCollapsibleConfirmedAction
           content={previewContent}
           actionType="send_email"
@@ -593,8 +593,8 @@ Best regards`;
           autoToggleInterval={4000}
         />
       </div>
-      
-      <div className="shrink-0 pt-3">
+
+      <div className="shrink-0 pt-0">
         <BentoConfirmationBar
           onConfirm={handleConfirm}
           onSkip={handleSkip}
@@ -607,21 +607,90 @@ Best regards`;
 
 function ProductivityCard() {
   return (
-    <Card className="h-full flex flex-col backdrop-blur-md border-[rgba(255,255,255,0.08)] overflow-hidden" style={{ background: "rgba(10,12,20,0.6)" }}>
-      <CardHeader className="pb-3 shrink-0">
-        <Badge className="w-fit text-orange-400 border-orange-900 text-[10px] font-mono tracking-widest mb-1" style={{ background: "rgba(120,53,15,0.4)" }}>
-          CONTROL
-        </Badge>
-        <CardTitle className={`${spaceGrotesk.className} text-lg font-bold text-white leading-snug`}>
-          Powerful, but never reckless.
-        </CardTitle>
-        <CardDescription className="text-gray-300">
-          Preview every sensitive action before it executes.
-        </CardDescription>
-      </CardHeader>
+    <Card className={`h-full flex flex-col overflow-hidden ${BENTO_CARD_CLASS}`} style={{ background: "#05070c" }}>
+      <CardContent className="flex-1 flex flex-col justify-between p-5 min-h-0 gap-5">
+        {/* Top row: headline + description */}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <div className="mb-2 inline-flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center text-cyan-300">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="7" rx="1" fill="currentColor" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" fill="currentColor" opacity="0.9" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" fill="currentColor" opacity="0.8" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" fill="currentColor" opacity="0.7" />
+                  </svg>
+                </span>
+                <span className="text-[12px] font-semibold tracking-[0.16em] text-cyan-300">INTEGRATIONS</span>
+              </div>
+              <h3 className={`${spaceGrotesk.className} text-[28px] font-bold text-white leading-[1.22] tracking-[-0.03em]`}>
+                Every tool you already use.<br />Now unified.
+              </h3>
+              <p className="text-[14px] leading-6 text-gray-300 mt-2 max-w-105">
+                Google Workspace · Microsoft 365 · GitHub · Search · Maps · Weather · Flights
+              </p>
+            </div>
+          </div>
+        </div>
 
-      <CardContent className="flex-1 px-4 pb-4 min-h-0 overflow-hidden">
-        <EmailPreview />
+        {/* Integration scroll strip */}
+        <div className="relative overflow-hidden h-19" style={{ width: "100%", maskImage: "linear-gradient(to right, transparent, black 8%, black 92%, transparent)" }}>
+          <motion.div
+            className="flex gap-3 w-max items-center"
+            animate={{ x: [0, -50 * INTEGRATIONS.length] }}
+            transition={{
+              duration: 28,
+              ease: "linear",
+              repeat: Infinity,
+            }}
+          >
+            {[...INTEGRATIONS, ...INTEGRATIONS, ...INTEGRATIONS].map((item, i) => (
+              <div key={`${item.name}-${i}`} className="flex h-14 w-14 items-center justify-center rounded-xl border border-white/8 bg-white/3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <Image
+                  src={item.logo}
+                  alt={item.name}
+                  width={28}
+                  height={28}
+                  className="object-contain shrink-0"
+                />
+              </div>
+            ))}
+          </motion.div>
+        </div>
+
+        {/* Bottom stat row */}
+        <div className="flex items-center gap-0">
+          {[
+            { value: "15+", label: "integrations" },
+            { value: "50+", label: "languages"    },
+            { value: "15+",  label: "agents"       },
+          ].map((s, idx) => (
+            <React.Fragment key={s.label}>
+              <div className="flex flex-1 flex-col items-center justify-center text-center gap-1">
+                <span
+                  className={`text-[36px] font-bold leading-none tracking-[-0.03em]`}
+                  style={
+                    idx === 1
+                      ? { backgroundImage: 'linear-gradient(90deg,#34d399,#06b6d4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }
+                      : { backgroundImage: 'linear-gradient(90deg,#60a5fa,#06b6d4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }
+                  }
+                >
+                  {s.value}
+                </span>
+                <span className="text-[12px] text-white/55 font-medium">
+                  {s.label}
+                </span>
+              </div>
+              {idx < 2 && (
+                <div className="mx-4 h-10 w-px bg-white/10" />
+              )}
+            </React.Fragment>
+          ))}
+          <span className="ml-auto text-[12px] font-medium px-0 py-0 rounded-none text-cyan-300">
+            Growing ↗
+          </span>
+        </div>
       </CardContent>
     </Card>
   );
@@ -732,7 +801,15 @@ function ScrambleBox() {
           zIndex: 5,
         }}
       >
-        <div className={`${spaceGrotesk.className} text-5xl font-bold text-white`}>
+        <div
+          className={`${spaceGrotesk.className} text-5xl font-bold`}
+          style={{
+            backgroundImage: "linear-gradient(90deg, #35dbff 0%, #4cf0ff 18%, #34f7d2 44%, #8cff5e 68%, #ff7a9a 100%)",
+            WebkitBackgroundClip: "text",
+            backgroundClip: "text",
+            color: "transparent",
+          }}
+        >
           {HELLOS[helloIdx]}
         </div>
       </div>
@@ -754,17 +831,17 @@ export default function BentoGridShowcaseDemo() {
         <span
           className={`${spaceGrotesk.className} inline-block text-[11px] font-bold tracking-widest px-3 py-1.5 rounded-full mb-4`}
           style={{
-            background: "rgba(59,130,246,0.08)",
-            border: "1px solid rgba(59,130,246,0.22)",
-            color: "#3b82f6",
+            background: "rgba(8, 47, 73, 0.55)",
+            border: "1px solid rgba(45, 212, 191, 0.22)",
+            color: "#2dd4bf",
           }}
         >
           CAPABILITIES
         </span>
         <h2
-          className={`${spaceGrotesk.className} text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-4`}
+          className={`${spaceGrotesk.className} text-4xl md:text-4xl lg:text-5xl font-bold text-white leading-tight mb-4`}
         >
-          Everything you need. Nothing you don't.
+          Everything your workflow was missing.
         </h2>
         <p className="text-lg md:text-xl text-gray-300 leading-relaxed">
           A platform built from the ground up for professionals who can't afford to waste time.

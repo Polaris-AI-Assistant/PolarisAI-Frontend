@@ -185,12 +185,12 @@ export const BentoExecutionTimeline: React.FC<BentoExecutionTimelineProps> = ({
     };
   }, []);
 
-  const visibleItems = items.filter((it) => it.state === "visible");
+  const displayItems = items.slice(-MAX_VISIBLE);
 
   return (
     <div className={`flex flex-col relative pl-4 overflow-hidden scrollbar-hide max-h-full ${className}`} style={{ overflowY: 'hidden', overflowX: 'hidden' }}>
-      {items.map((item, i) => {
-        const isLast = i === visibleItems.length - 1;
+      {displayItems.map((item, i) => {
+        const isLast = i === displayItems.length - 1;
 
         return (
           <div
@@ -210,28 +210,26 @@ export const BentoExecutionTimeline: React.FC<BentoExecutionTimelineProps> = ({
             {/* Connector line to next step */}
             {!isLast && item.state === "visible" && (
               <div
-                className="absolute left-[9px] top-8 bottom-[-10px] w-px"
+                className="absolute left-2.25 top-8 -bottom-2.5 w-px"
                 style={{ background: "linear-gradient(to bottom, #166534, transparent)" }}
               />
             )}
 
-            {/* Icon only - no circles or backgrounds */}
-            <div className="relative flex-shrink-0 mt-0.5 w-6 h-6 flex items-center justify-center">
-              {item.step.appLogo ? (
-                <img
-                  src={item.step.appLogo}
-                  alt="app-logo"
-                  className="object-contain w-full h-full"
-                />
-              ) : (
-                <div className="text-green-400 flex items-center justify-center">
-                  {item.step.icon}
-                </div>
-              )}
-            </div>
+            {/* Colored icon only */}
+            {item.step.appLogo ? (
+              <img
+                src={item.step.appLogo}
+                alt="app-logo"
+                className="mt-0.5 shrink-0 w-5 h-5 object-contain"
+              />
+            ) : (
+              <div className="mt-0.5 shrink-0 text-green-400 flex items-center justify-center w-5 h-5">
+                {item.step.icon}
+              </div>
+            )}
 
             {/* Text */}
-            <div className="text-[14.5px] text-neutral-300 leading-relaxed pt-0.5">
+            <div className="text-[13px] text-neutral-300 leading-relaxed pt-0.5">
               {item.step.content}
             </div>
           </div>

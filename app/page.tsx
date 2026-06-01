@@ -7,7 +7,12 @@ import Hero from './landing_page/hero';
 import { Footer } from "@/components/ui/footer";
 import IntegrationsSection from './landing_page/integrations';
 import BentoGridShowcaseDemo from './landing_page/bentogrid_demo';
-
+import PricingSection from './landing_page/PricingSection';
+import CTASection from './landing_page/CTASection';
+import Pricing from '@/components/ui/demo-pricing';
+import PolarisImpactSection from './landing_page/impact';
+import LongTermMemorySection from './landing_page/longterm_memory';
+import SecurityTrustSection from './landing_page/security_trust';
 const syncAuthToCookies = () => {
   const authToken = getAuthToken();
   const refreshToken = getRefreshToken();
@@ -126,8 +131,15 @@ export default function Home() {
     <>
       <Hero />
       <div className="bg-black w-full">
-        <IntegrationsSection/>
+       
+        <LongTermMemorySection />
+        <SecurityTrustSection/>
+         <IntegrationsSection/>
         <BentoGridShowcaseDemo/>
+        <PolarisImpactSection/>
+        <PricingSection/>
+        <CTASection/>
+    
         <Footer />
       </div>
     </>
