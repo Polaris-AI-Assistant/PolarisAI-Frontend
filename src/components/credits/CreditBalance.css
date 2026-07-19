@@ -1,0 +1,74 @@
+/* Credit Balance Component Styles */
+
+.credit-balance {
+  position: relative;
+  user-select: none;
+}
+
+.credit-balance-loading {
+  padding: 0.5rem;
+}
+
+.credit-balance-error {
+  padding: 0.5rem;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Tooltip animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.credit-balance .absolute {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Responsive styles */
+@media (max-width: 640px) {
+  .credit-balance .absolute {
+    left: 0;
+    right: 0;
+    width: calc(100vw - 2rem);
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .credit-balance .bg-white {
+    background-color: #1f2937;
+    border-color: #374151;
+    color: #f3f4f6;
+  }
+  
+  .credit-balance .text-gray-600 {
+    color: #9ca3af;
+  }
+  
+  .credit-balance .bg-gray-100 {
+    background-color: #374151;
+  }
+  
+  .credit-balance .bg-gray-200 {
+    background-color: #4b5563;
+  }
+}

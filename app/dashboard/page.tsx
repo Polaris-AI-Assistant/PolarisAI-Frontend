@@ -13,6 +13,7 @@ import { connectMeet, checkMeetStatus, MeetConnectionStatus, disconnectMeet } fr
 import { checkMicrosoftStatus, connectMicrosoftApp, disconnectMicrosoftApp, MicrosoftConnectionStatus } from '../../lib/microsoft'
 import { MainAgentContent } from '../../components/MainAgentContent'
 import ProfileDropdown from '../../components/kokonutui/profile-dropdown'
+import CreditBalance from '../../components/credits/CreditBalance'
 import AppsIntegrations from '../../components/apps-integrations'
 import SchedulesContent from '../../components/SchedulesContent'
 import VaultContent from '../../components/VaultContent'
@@ -1442,7 +1443,12 @@ function Dashboard() {
       </div>
 
           {/* Profile Dropdown at bottom - fixed */}
-          <div className="p-4 pt-4 border-t border-[#404040] flex-shrink-0 bg-[#181818]">
+          <div className="p-4 pt-4 border-t border-[#404040] flex-shrink-0 bg-[#181818] space-y-3">
+            {/* Credit Balance Display */}
+            <div className="px-3">
+              <CreditBalance />
+            </div>
+            
             <ProfileDropdown 
               data={{
                 name: user ? (user.first_name ? `${user.first_name}${user.last_name ? ' ' + user.last_name : ''}` : user.email.split('@')[0]) : 'User',

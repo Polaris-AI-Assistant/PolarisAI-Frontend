@@ -2157,6 +2157,19 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
             };
             break;
           
+          case 'credit_deduction':
+            // Credit was deducted - refresh the credit balance immediately
+            console.log('[Credits] Credit deduction event received:', chunk);
+            try {
+              // Import the refresh function dynamically
+              import('../components/credits/CreditBalance').then(module => {
+                module.refreshCreditBalance();
+              });
+            } catch (error) {
+              console.error('[Credits] Error refreshing credit balance:', error);
+            }
+            break;
+          
           case 'confirmation_request':
             // Handle confirmation request - pause streaming and show confirmation UI
             console.log('[Confirmation] Received confirmation request:', chunk);
@@ -2922,6 +2935,19 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
               agentsUsed: chunk.agentsUsed,
               processingTime: chunk.processingTime,
             };
+            break;
+
+          case 'credit_deduction':
+            // Credit was deducted - refresh the credit balance immediately
+            console.log('[Credits] Credit deduction event received (confirmation flow):', chunk);
+            try {
+              // Import the refresh function dynamically
+              import('../components/credits/CreditBalance').then(module => {
+                module.refreshCreditBalance();
+              });
+            } catch (error) {
+              console.error('[Credits] Error refreshing credit balance:', error);
+            }
             break;
 
           case 'confirmation_request':
