@@ -296,7 +296,7 @@ export interface StreamChunk {
     // Research
     | 'timeline_research_step'
     // File generation
-    | 'file_generated' | 'file_generation_error' | 'memory_stored';
+    | 'file_generated' | 'file_generation_error' | 'memory_stored' | 'credit_deduction';
   status?: 'start' | 'stop';
   message?: string;
   agents?: string[];

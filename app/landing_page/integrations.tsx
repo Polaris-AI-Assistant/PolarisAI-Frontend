@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { Space_Grotesk } from 'next/font/google'
-import { Blocks, RefreshCw, Zap } from 'lucide-react'
+import { LayoutGrid, RefreshCw, Zap } from 'lucide-react'
 
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] })
 
@@ -29,7 +29,7 @@ export default function IntegrationsSection() {
                         <div className="relative z-20 max-w-xl">
                             {/* Badge */}
                             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/5 px-3 py-1.5 text-[10px] font-bold tracking-[0.22em] text-cyan-300">
-                                <Blocks size={14} strokeWidth={1.5} />
+                                <LayoutGrid size={14} strokeWidth={1.5} />
                                 <span>CONNECTORS &amp; INTEGRATIONS</span>
                             </div>
 
