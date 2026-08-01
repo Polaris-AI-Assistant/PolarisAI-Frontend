@@ -173,7 +173,7 @@ export default function CreditBalance({
           } hover:shadow-md`}
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
-          onClick={() => window.location.href = '/settings/billing'}
+          onClick={() => window.location.href = '/dashboard/credits'}
         >
           <Coins className="h-5 w-5" />
           <span className="font-semibold text-lg">
@@ -252,7 +252,7 @@ export default function CreditBalance({
 
               {/* Action Button */}
               <button
-                onClick={() => window.location.href = '/settings/billing'}
+                onClick={() => window.location.href = '/dashboard/credits'}
                 className={`w-full py-2 px-4 rounded font-medium text-sm transition-colors ${
                   credits.isLow
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
@@ -282,7 +282,7 @@ export default function CreditBalance({
             <span className="font-semibold text-red-600">-{credits.totalSpent}</span>
           </div>
           <button
-            onClick={() => window.location.href = '/settings/billing'}
+            onClick={() => window.location.href = '/dashboard/credits'}
             className="w-full mt-2 py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium transition-colors"
           >
             Manage Credits

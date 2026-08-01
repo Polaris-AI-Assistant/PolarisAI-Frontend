@@ -4249,9 +4249,9 @@ export function MainAgentContent({ chatId, onChatIdChange }: MainAgentContentPro
 
               {isThinking && (
                 <div className="flex flex-col gap-4 max-w-3xl mb-4">
-                  {/* Show timeline during thinking ONLY if no streaming message owns it yet */}
+                  {/* Show timeline during thinking ONLY if no streaming message owns it yet AND no pending confirmation */}
                   {/* This prevents duplicate timeline when the assistant message already renders it */}
-                  {timelineEvents.length > 0 && !streamingMessageId && (
+                  {timelineEvents.length > 0 && !streamingMessageId && !pendingConfirmation && (
                     <TimelineContainer
                       events={timelineEvents}
                       isVisible={showTimeline}
